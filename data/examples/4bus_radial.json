@@ -1,0 +1,25 @@
+{
+  "name": "4-bus radial example (PDF Figure 1)",
+  "base_mva": 10.0,
+  "buses": [
+    { "id": "B1", "name": "Bus 1 (Grid)", "base_kv": 33.0, "is_slack": true,  "is_leaf": false },
+    { "id": "B2", "name": "Bus 2",        "base_kv": 11.0, "is_slack": false, "is_leaf": false },
+    { "id": "B3", "name": "Bus 3",        "base_kv": 11.0, "is_slack": false, "is_leaf": false },
+    { "id": "B4", "name": "Bus 4",        "base_kv": 11.0, "is_slack": false, "is_leaf": true, "v_set_pu": 1.00 }
+  ],
+  "lines": [
+    { "id": "T1",  "from_bus": "B1", "to_bus": "B2", "r_pu": 0.005, "x_pu": 0.10, "b_pu": 0.0 },
+    { "id": "L23", "from_bus": "B2", "to_bus": "B3", "r_pu": 0.020, "x_pu": 0.06, "b_pu": 0.0 },
+    { "id": "L34", "from_bus": "B3", "to_bus": "B4", "r_pu": 0.025, "x_pu": 0.07, "b_pu": 0.0 }
+  ],
+  "loads": [
+    { "id": "Ld3", "bus": "B3", "p_kw": 200.0, "q_kvar": 60.0 },
+    { "id": "Ld4", "bus": "B4", "p_kw": 150.0, "q_kvar": 50.0 }
+  ],
+  "generators": [
+    { "id": "G2",  "bus": "B2", "p_kw": 100.0, "q_kvar": 0.0 }
+  ],
+  "capacitors": [
+    { "id": "C3",  "bus": "B3", "q_kvar": 50.0, "in_service": true }
+  ]
+}

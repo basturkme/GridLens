@@ -19,3 +19,21 @@ def package_dir() -> Path:
 
 def resource(*parts: str) -> Path:
     return package_dir().joinpath(*parts)
+
+
+def data_dir() -> Path:
+    """Root of the bundled ``data/`` tree (example networks, format spec).
+
+    In a frozen build PyInstaller is told to drop ``data/`` next to the
+    extracted package (see gridlens.spec); in dev it lives at the repo root,
+    two levels above this file (src/gridlens/_resources.py -> repo root).
+    """
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "data"
+    return Path(__file__).resolve().parents[2] / "data"
+
+
+def default_example() -> Path | None:
+    """Path to the example feeder shipped with the app, or None if absent."""
+    candidate = data_dir() / "examples" / "4bus_radial.json"
+    return candidate if candidate.exists() else None

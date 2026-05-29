@@ -3,6 +3,11 @@ from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files("gridlens", includes=["**/*.qss", "**/*.png", "**/*.svg"])
+# Ship the example feeder + format spec so the app opens with a demo network.
+datas += [
+    ("data/examples/4bus_radial.json", "data/examples"),
+    ("data/FORMAT.md", "data"),
+]
 
 a = Analysis(
     ["src/gridlens/__main__.py"],

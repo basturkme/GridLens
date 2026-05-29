@@ -178,7 +178,9 @@ class NetworkView(PageView):
             any_visible = False
             for j in range(top.childCount()):
                 child = top.child(j)
-                match = needle in child.text(0).lower()
+                bus_id = child.data(0, _BUS_ROLE) or ""
+                haystack = f"{child.text(0)} {bus_id}".lower()
+                match = needle in haystack
                 child.setHidden(bool(needle) and not match)
                 any_visible = any_visible or not child.isHidden()
             top.setHidden(bool(needle) and not any_visible)

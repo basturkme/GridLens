@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 
 from gridlens import __app_name__
+from gridlens.core.models import Network, SolutionResult
 from gridlens.ui.shell.footer import Footer
 from gridlens.ui.shell.header_bar import HeaderBar
 from gridlens.ui.shell.sidebar import Sidebar
@@ -76,9 +77,39 @@ class MainWindow(QMainWindow):
         status.showMessage("Idle")
         self.setStatusBar(status)
 
+        self._network: Network | None = None
+
         # ----- Wiring -----
         self._sidebar.pageChanged.connect(self._switch_page)
+        network_view = self._pages["network"]
+        if hasattr(network_view, "busPicked"):
+            network_view.busPicked.connect(self._on_bus_picked)
         self._switch_page("home")
+
+    def set_network(
+        self, network: Network | None, solution: SolutionResult | None = None
+    ) -> None:
+        """Load a network into the views that consume it."""
+        self._network = network
+        self._pages["network"].set_network(network, solution)
+        if network is None:
+            self.statusBar().showMessage("Idle")
+            return
+        msg = f"Loaded: {network.name or 'Untitled'} — {len(network.buses)} buses"
+        if solution is not None:
+            violations = sum(
+                1 for b in solution.bus_results if b.violation != "ok"
+            )
+            msg += (
+                f" · solved in {solution.iterations} iters"
+                f" · {violations} voltage violation(s)"
+                if solution.converged
+                else " · solver did not converge"
+            )
+        self.statusBar().showMessage(msg)
+
+    def _on_bus_picked(self, bus_id: str) -> None:
+        self.statusBar().showMessage(f"Selected bus: {bus_id}")
 
     def _switch_page(self, key: str) -> None:
         page = self._pages.get(key)

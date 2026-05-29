@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 
 from gridlens import __app_name__
+from gridlens.core import solve
 from gridlens.core.models import Network, SolutionResult
 from gridlens.ui.shell.footer import Footer
 from gridlens.ui.shell.header_bar import HeaderBar
@@ -78,12 +79,16 @@ class MainWindow(QMainWindow):
         self.setStatusBar(status)
 
         self._network: Network | None = None
+        self._solution: SolutionResult | None = None
 
         # ----- Wiring -----
         self._sidebar.pageChanged.connect(self._switch_page)
         network_view = self._pages["network"]
         if hasattr(network_view, "busPicked"):
             network_view.busPicked.connect(self._on_bus_picked)
+        equipment_view = self._pages["equipment"]
+        if hasattr(equipment_view, "networkEdited"):
+            equipment_view.networkEdited.connect(self._on_network_edited)
         self._switch_page("home")
 
     def set_network(
@@ -91,22 +96,38 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Load a network into the views that consume it."""
         self._network = network
+        self._solution = solution
         self._pages["network"].set_network(network, solution)
-        if network is None:
-            self.statusBar().showMessage("Idle")
+        self._pages["equipment"].set_network(network, solution)
+        self.statusBar().showMessage(self._status_text())
+
+    def _on_network_edited(self) -> None:
+        """An equipment value changed — re-solve and refresh the views live."""
+        if self._network is None:
             return
-        msg = f"Loaded: {network.name or 'Untitled'} — {len(network.buses)} buses"
-        if solution is not None:
-            violations = sum(
-                1 for b in solution.bus_results if b.violation != "ok"
-            )
-            msg += (
-                f" · solved in {solution.iterations} iters"
-                f" · {violations} voltage violation(s)"
-                if solution.converged
-                else " · solver did not converge"
-            )
-        self.statusBar().showMessage(msg)
+        self._solution = solve(self._network)
+        self._pages["network"].set_network(self._network, self._solution)
+        self._pages["equipment"].apply_solution(self._solution)
+        self.statusBar().showMessage(self._status_text())
+
+    def _status_text(self) -> str:
+        if self._network is None:
+            return "Idle"
+        msg = (
+            f"Loaded: {self._network.name or 'Untitled'} — "
+            f"{len(self._network.buses)} buses"
+        )
+        sol = self._solution
+        if sol is not None:
+            if sol.converged:
+                violations = sum(1 for b in sol.bus_results if b.violation != "ok")
+                msg += (
+                    f" · solved in {sol.iterations} iters"
+                    f" · {violations} voltage violation(s)"
+                )
+            else:
+                msg += " · solver did not converge"
+        return msg
 
     def _on_bus_picked(self, bus_id: str) -> None:
         self.statusBar().showMessage(f"Selected bus: {bus_id}")

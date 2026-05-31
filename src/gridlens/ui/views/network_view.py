@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from gridlens.core.models import Network, SolutionResult
 from gridlens.ui.sld import build_scene
-from gridlens.ui.sld.items import BusItem, _EquipmentItem
+from gridlens.ui.sld.items import BranchItem, BusItem, TransformerItem, _EquipmentItem
 from gridlens.ui.views._base import PageView
 
 _BUS_ROLE = Qt.ItemDataRole.UserRole
@@ -64,14 +64,40 @@ class SLDView(QGraphicsView):
             self.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
     def select_bus(self, bus_id: str) -> None:
-        item = self._bus_items.get(bus_id)
-        if item is None:
+        self.select_item("bus", bus_id)
+
+    def select_item(self, kind: str, obj_id: str) -> None:
+        target_item = None
+        for item in self._scene.items():
+            if kind == "bus" and isinstance(item, BusItem) and item.bus_id == obj_id:
+                target_item = item
+                break
+            elif kind == "line" and isinstance(item, BranchItem) and getattr(item, "line_id", None) == obj_id:
+                target_item = item
+                break
+            elif isinstance(item, _EquipmentItem) and item.kind == kind and item.obj_id == obj_id:
+                target_item = item
+                break
+
+        if target_item is None and kind == "line":
+            for item in self._scene.items():
+                if isinstance(item, TransformerItem) and getattr(item, "line_id", None) == obj_id:
+                    target_item = item
+                    break
+
+        if target_item is None:
             return
+
         blocked = self._scene.blockSignals(True)
         self._scene.clearSelection()
-        item.setSelected(True)
+        if kind == "line":
+            for item in self._scene.items():
+                if (isinstance(item, BranchItem) or isinstance(item, TransformerItem)) and getattr(item, "line_id", None) == obj_id:
+                    item.setSelected(True)
+        else:
+            target_item.setSelected(True)
         self._scene.blockSignals(blocked)
-        self.centerOn(item)
+        self.centerOn(target_item)
 
     def _on_selection_changed(self) -> None:
         for item in self._scene.selectedItems():
@@ -80,6 +106,12 @@ class SLDView(QGraphicsView):
                 return
             if isinstance(item, _EquipmentItem):
                 self.itemPicked.emit(item.kind, item.obj_id)
+                return
+            if isinstance(item, BranchItem) and getattr(item, "line_id", None):
+                self.itemPicked.emit("line", item.line_id)
+                return
+            if isinstance(item, TransformerItem) and getattr(item, "line_id", None):
+                self.itemPicked.emit("line", item.line_id)
                 return
 
     def wheelEvent(self, event) -> None:  # noqa: N802
@@ -187,7 +219,7 @@ class NetworkView(PageView):
             node.setData(0, _KIND_ROLE, kind)
             node.setData(0, _ID_ROLE, obj_id)
 
-            btn = QPushButton("\U0001F441")  # 👁 eye icon
+            btn = QPushButton("\u25CE")  # ◎ bullseye (monochrome)
             btn.setObjectName("DetailsButton")
             btn.setToolTip("Details")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -208,7 +240,7 @@ class NetworkView(PageView):
             node.setData(0, _KIND_ROLE, "bus")
             node.setData(0, _ID_ROLE, bus.id)
 
-            btn = QPushButton("\U0001F441")  # 👁 eye icon
+            btn = QPushButton("\u25CE")  # ◎ bullseye (monochrome)
             btn.setObjectName("DetailsButton")
             btn.setToolTip("Details")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -228,10 +260,20 @@ class NetworkView(PageView):
         for gen in network.generators:
             _add_equipment(gens, f"{gen.id} @ {gen.bus}", "gen", gen.id)
 
-        caps = QTreeWidgetItem(self._tree, ["Capacitors"])
-        for cap in network.capacitors:
-            state = "on" if cap.in_service else "off"
-            _add_equipment(caps, f"{cap.id} @ {cap.bus} ({state})", "cap", cap.id)
+        capacitors_list = [c for c in network.capacitors if c.q_kvar >= 0]
+        reactors_list = [c for c in network.capacitors if c.q_kvar < 0]
+
+        if capacitors_list:
+            caps = QTreeWidgetItem(self._tree, ["Capacitors"])
+            for cap in capacitors_list:
+                state = "on" if cap.in_service else "off"
+                _add_equipment(caps, f"{cap.id} @ {cap.bus} ({state})", "cap", cap.id)
+
+        if reactors_list:
+            reactors = QTreeWidgetItem(self._tree, ["Reactors"])
+            for cap in reactors_list:
+                state = "on" if cap.in_service else "off"
+                _add_equipment(reactors, f"{cap.id} @ {cap.bus} ({state})", "cap", cap.id)
 
         self._tree.expandAll()
 
@@ -251,14 +293,28 @@ class NetworkView(PageView):
 
     # -- selection sync ----------------------------------------------------- #
     def _on_tree_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
-        bus_id = item.data(0, _BUS_ROLE)
-        if bus_id:
-            self._sld.select_bus(bus_id)
-            self.busPicked.emit(bus_id)
+        kind = item.data(0, _KIND_ROLE)
+        obj_id = item.data(0, _ID_ROLE)
+        if kind and obj_id:
+            self._sld.select_item(kind, obj_id)
+            if kind == "bus":
+                self.busPicked.emit(obj_id)
+
+    def _select_tree_item(self, kind: str, obj_id: str) -> None:
+        for i in range(self._tree.topLevelItemCount()):
+            top = self._tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                child = top.child(j)
+                if child.data(0, _KIND_ROLE) == kind and child.data(0, _ID_ROLE) == obj_id:
+                    blocked = self._tree.blockSignals(True)
+                    self._tree.setCurrentItem(child)
+                    self._tree.blockSignals(blocked)
+                    return
 
     def _on_details_clicked(self, kind: str, obj_id: str) -> None:
         """Navigate to the Equipment page for the given item."""
         self.itemPicked.emit(kind, obj_id)
 
     def _on_bus_picked(self, bus_id: str) -> None:
+        self._select_tree_item("bus", bus_id)
         self.busPicked.emit(bus_id)

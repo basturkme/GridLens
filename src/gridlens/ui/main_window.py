@@ -158,6 +158,7 @@ class MainWindow(QMainWindow):
         self.set_network(network, solve(network))
         self._current_path = Path(path) if set_current else None
         self._set_dirty(False)
+        self._switch_page("network")
 
     def save_to(self, path: str | Path) -> None:
         """Serialize the current network to disk and mark it clean."""
@@ -311,14 +312,9 @@ class MainWindow(QMainWindow):
         return msg
 
     def _on_bus_picked(self, bus_id: str) -> None:
-        """Clicking a bus on the diagram jumps to its editor on the Equipment page."""
-        equipment = self._pages["equipment"]
-        if self._network is not None and hasattr(equipment, "edit_bus"):
-            self._switch_page("equipment")
-            equipment.edit_bus(bus_id)
-            self.statusBar().showMessage(f"Editing bus: {bus_id}")
-        else:
-            self.statusBar().showMessage(f"Selected bus: {bus_id}")
+        """Clicking a bus highlights it on the SLD. Navigation to Equipment is
+        handled exclusively via the Details button / diagram symbol click."""
+        self.statusBar().showMessage(f"Selected bus: {bus_id}")
 
     def _on_item_picked(self, kind: str, obj_id: str) -> None:
         """Clicking a load / generator / capacitor symbol jumps to its editor."""

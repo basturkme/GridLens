@@ -8,4 +8,4 @@ DEFAULT_TOLERANCE_PU: float = 1e-5
 DEFAULT_MAX_ITER: int = 50
 DEFAULT_BASE_MVA: float = 10.0
 
-MAX_BUSES: int = 10
+MAX_BUSES: int = 30

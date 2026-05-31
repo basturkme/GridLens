@@ -56,7 +56,7 @@ def build_scene(
         fb, tb = bus_by_id.get(ln.from_bus), bus_by_id.get(ln.to_bus)
         if fb is not None and tb is not None and fb.base_kv != tb.base_kv:
             mid = QPointF((p1.x() + p2.x()) / 2.0, (p1.y() + p2.y()) / 2.0)
-            scene.addItem(TransformerItem(mid))
+            scene.addItem(TransformerItem(mid, ln.id))
 
     # --- equipment grouped by bus --- #
     equip: dict[str, list] = defaultdict(list)
@@ -85,18 +85,24 @@ def build_scene(
 
         attached = equip.get(bus.id, [])
         if attached:
-            y = p.y() + BUS_HALF_H + _EQUIP_GAP
-            last_y = p.y() + BUS_HALF_H + _EQUIP_GAP * len(attached)
-            scene.addLine(p.x(), p.y() + BUS_HALF_H, p.x(), last_y, drop_pen)
-            for kind, obj in attached:
-                center = QPointF(p.x(), y)
+            y = p.y() + BUS_HALF_H + 40.0
+            for i, (kind, obj) in enumerate(attached):
+                dx = 35.0 + i * 45.0
+                center = QPointF(p.x() + dx, y)
                 if kind == "load":
                     scene.addItem(LoadItem(center, obj))
+                    y_top = y - 16.0
                 elif kind == "gen":
                     scene.addItem(GeneratorItem(center, obj))
+                    y_top = y - 28.0
                 else:
                     scene.addItem(CapacitorItem(center, obj))
-                y += _EQUIP_GAP
+                    y_top = y - 16.0
+                
+                # Draw orthogonal connection line: right, then down
+                y_bus = p.y() + 10.0 + i * 15.0
+                scene.addLine(p.x(), y_bus, p.x() + dx, y_bus, drop_pen)
+                scene.addLine(p.x() + dx, y_bus, p.x() + dx, y_top, drop_pen)
 
     scene.setSceneRect(scene.itemsBoundingRect().adjusted(-50, -50, 50, 50))
     return bus_items

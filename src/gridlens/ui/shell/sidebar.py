@@ -15,13 +15,13 @@ from gridlens.ui.widgets.nav_button import NavButton
 
 NAV_ITEMS: list[tuple[str, str, str]] = [
     # (page_key, group, label)
-    ("home", "", "🏠  Home"),
-    ("network", "Project", "📁  Network"),
-    ("solver", "Project", "⚡  Solver"),
-    ("equipment", "Project", "🔌  Equipment"),
-    ("reports", "Project", "📊  Reports"),
-    ("settings", "Administration", "⚙  Settings"),
-    ("about", "Administration", "ℹ  About"),
+    ("home", "", "\u2302  Home"),
+    ("network", "Project", "\u25A6  Network"),
+    ("solver", "Project", "\u26A1\uFE0E  Solver"),
+    ("equipment", "Project", "\u2699\uFE0E  Equipment"),
+    ("reports", "Project", "\u25A4  Reports"),
+    ("settings", "Administration", "\u2630  Settings"),
+    ("about", "Administration", "\u2139\uFE0E  About"),
 ]
 
 

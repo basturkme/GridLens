@@ -16,7 +16,6 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyleSheet(load_stylesheet())
 
     window = MainWindow()
-    window.load_startup_example()  # best-effort; app still opens if absent
     window.show()
     return app.exec()
 

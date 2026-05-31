@@ -29,7 +29,7 @@ class HeaderBar(QFrame):
         layout.addWidget(title)
         layout.addStretch(1)
 
-        for label in ("?", "🔔", "A"):
+        for label in ("?", "\u2709\uFE0E", "A"):
             btn = QToolButton()
             btn.setObjectName("HeaderIcon")
             btn.setText(label)

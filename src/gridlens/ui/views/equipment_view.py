@@ -120,9 +120,18 @@ class EquipmentView(PageView):
         for x in net.generators:
             add(gens, f"{x.id} @ {x.bus}", "gen", x.id)
 
-        caps = QTreeWidgetItem(self._tree, ["Capacitors"])
-        for x in net.capacitors:
-            add(caps, f"{x.id} @ {x.bus}", "cap", x.id)
+        capacitors_list = [c for c in net.capacitors if c.q_kvar >= 0]
+        reactors_list = [c for c in net.capacitors if c.q_kvar < 0]
+
+        if capacitors_list:
+            caps = QTreeWidgetItem(self._tree, ["Capacitors"])
+            for x in capacitors_list:
+                add(caps, f"{x.id} @ {x.bus}", "cap", x.id)
+
+        if reactors_list:
+            reactors = QTreeWidgetItem(self._tree, ["Reactors"])
+            for x in reactors_list:
+                add(reactors, f"{x.id} @ {x.bus}", "cap", x.id)
 
         self._tree.expandAll()
 
@@ -197,12 +206,14 @@ class EquipmentView(PageView):
         return w
 
     def _capacitor_editor(self, cap) -> QWidget:
-        w, form = _form(f"Capacitor {cap.id}", f"Connected at bus {cap.bus}")
+        name = "Reactor" if cap.q_kvar < 0 else "Capacitor"
+        w, form = _form(f"{name} {cap.id}", f"Connected at bus {cap.bus}")
 
-        q_field = NumericField(minimum=0.0)
+        q_field = NumericField(minimum=None if cap.q_kvar < 0 else 0.0)
         q_field.setText(f"{cap.q_kvar:g}")
         q_field.valueChanged.connect(lambda v: self._set_attr(cap, "q_kvar", v))
-        form.addRow("Rating Q (kvar)", q_field)
+        label_rating = "Rating Q (kvar, negative)" if cap.q_kvar < 0 else "Rating Q (kvar)"
+        form.addRow(label_rating, q_field)
 
         in_service = QCheckBox("In service")
         in_service.setChecked(cap.in_service)

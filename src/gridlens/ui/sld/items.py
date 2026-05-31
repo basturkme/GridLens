@@ -135,6 +135,9 @@ class BranchItem(QGraphicsItem):
         self._p2 = p2
         self.line_id = line.id
         self.setZValue(1)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setAcceptHoverEvents(True)
+        self._hover = False
         self.setToolTip(
             f"Line {line.id}\n{line.from_bus} → {line.to_bus}\n"
             f"Z = {line.r_pu:g} + j{line.x_pu:g} pu"
@@ -151,8 +154,24 @@ class BranchItem(QGraphicsItem):
     def boundingRect(self) -> QRectF:
         return self._path().boundingRect().adjusted(-6, -6, 6, 6)
 
+    def hoverEnterEvent(self, event) -> None:  # noqa: N802
+        self._hover = True
+        self.update()
+
+    def hoverLeaveEvent(self, event) -> None:  # noqa: N802
+        self._hover = False
+        self.update()
+
     def paint(self, painter, option, widget=None) -> None:
-        painter.setPen(QPen(QColor(Colors.TEXT_MUTED), 2.0))
+        selected = self.isSelected()
+        if self._hover or selected:
+            halo = QColor(Colors.BRAND)
+            halo.setAlpha(60 if not selected else 110)
+            painter.setPen(QPen(halo, 8.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawPath(self._path())
+
+        color = Colors.BRAND if selected else Colors.TEXT_MUTED
+        painter.setPen(QPen(QColor(color), 2.0))
         painter.drawPath(self._path())
 
 
@@ -162,17 +181,38 @@ class BranchItem(QGraphicsItem):
 class TransformerItem(QGraphicsItem):
     """Two interlocking windings, drawn where two buses differ in base kV."""
 
-    def __init__(self, center: QPointF) -> None:
+    def __init__(self, center: QPointF, line_id: str | None = None) -> None:
         super().__init__()
         self.setPos(center)
+        self.line_id = line_id
         self.setZValue(5)
-        self.setToolTip("Transformer (winding change)")
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setAcceptHoverEvents(True)
+        self._hover = False
+        self.setToolTip(f"Transformer {line_id}\n(winding change)" if line_id else "Transformer (winding change)")
 
     def boundingRect(self) -> QRectF:
         return QRectF(-22.0, -14.0, 44.0, 28.0)
 
+    def hoverEnterEvent(self, event) -> None:  # noqa: N802
+        self._hover = True
+        self.update()
+
+    def hoverLeaveEvent(self, event) -> None:  # noqa: N802
+        self._hover = False
+        self.update()
+
     def paint(self, painter, option, widget=None) -> None:
-        painter.setPen(QPen(QColor(Colors.BRAND), 2.0))
+        selected = self.isSelected()
+        if self._hover or selected:
+            halo = QColor(Colors.BRAND)
+            halo.setAlpha(60 if not selected else 110)
+            painter.setPen(QPen(halo, 8.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(-7.0, 0.0), 12.0, 12.0)
+            painter.drawEllipse(QPointF(7.0, 0.0), 12.0, 12.0)
+
+        painter.setPen(QPen(QColor(Colors.BRAND if not selected else Colors.BRAND), 3.0 if selected else 2.0))
         painter.setBrush(QBrush(QColor(Colors.BG)))
         painter.drawEllipse(QPointF(-7.0, 0.0), 10.0, 10.0)
         painter.drawEllipse(QPointF(7.0, 0.0), 10.0, 10.0)
@@ -191,6 +231,25 @@ class _EquipmentItem(QGraphicsItem):
         self.setZValue(8)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAcceptHoverEvents(True)
+        self._hover = False
+
+    def hoverEnterEvent(self, event) -> None:  # noqa: N802
+        self._hover = True
+        self.update()
+
+    def hoverLeaveEvent(self, event) -> None:  # noqa: N802
+        self._hover = False
+        self.update()
+
+    def draw_highlight(self, painter: QPainter) -> None:
+        selected = self.isSelected()
+        if self._hover or selected:
+            halo = QColor(Colors.BRAND)
+            halo.setAlpha(60 if not selected else 110)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(halo))
+            painter.drawRoundedRect(self.boundingRect().adjusted(-4, -4, 4, 4), 6, 6)
 
 
 class LoadItem(_EquipmentItem):
@@ -204,6 +263,7 @@ class LoadItem(_EquipmentItem):
         return QRectF(-10.0, -16.0, 20.0, 34.0)
 
     def paint(self, painter, option, widget=None) -> None:
+        self.draw_highlight(painter)
         pen = QPen(QColor(Colors.TEXT), 2.0)
         painter.setPen(pen)
         painter.drawLine(QPointF(0.0, -16.0), QPointF(0.0, 2.0))
@@ -226,6 +286,7 @@ class GeneratorItem(_EquipmentItem):
         return QRectF(-14.0, -28.0, 28.0, 44.0)
 
     def paint(self, painter, option, widget=None) -> None:
+        self.draw_highlight(painter)
         painter.setPen(QPen(QColor(Colors.OK), 2.0))
         painter.drawLine(QPointF(0.0, -28.0), QPointF(0.0, -13.0))
         painter.setBrush(QBrush(QColor(Colors.BG)))
@@ -244,22 +305,41 @@ class CapacitorItem(_EquipmentItem):
     def __init__(self, center: QPointF, cap: Capacitor) -> None:
         super().__init__(center, cap.id)
         self._in_service = cap.in_service
+        self._q_kvar = cap.q_kvar
         state = "in service" if cap.in_service else "out of service"
-        self.setToolTip(f"Capacitor {cap.id}\n{cap.q_kvar:g} kvar ({state})")
+        name = "Reactor" if cap.q_kvar < 0 else "Capacitor"
+        val = abs(cap.q_kvar)
+        unit = "kvar (consuming)" if cap.q_kvar < 0 else "kvar"
+        self.setToolTip(f"{name} {cap.id}\n{val:g} {unit} ({state})")
 
     def boundingRect(self) -> QRectF:
         return QRectF(-12.0, -16.0, 24.0, 34.0)
 
     def paint(self, painter, option, widget=None) -> None:
-        # Greyed out when switched out of service.
+        self.draw_highlight(painter)
         color = QColor(Colors.BRAND if self._in_service else Colors.BORDER)
         painter.setPen(QPen(color, 2.0))
-        painter.drawLine(QPointF(0.0, -16.0), QPointF(0.0, -3.0))
-        painter.drawLine(QPointF(-11.0, -3.0), QPointF(11.0, -3.0))
-        painter.drawLine(QPointF(-11.0, 3.0), QPointF(11.0, 3.0))
-        painter.drawLine(QPointF(0.0, 3.0), QPointF(0.0, 10.0))
-        # Ground tick.
-        painter.drawLine(QPointF(-7.0, 14.0), QPointF(7.0, 14.0))
+
+        if self._q_kvar < 0:
+            # Draw Inductor coil symbol (Reactor)
+            painter.drawLine(QPointF(0.0, -16.0), QPointF(0.0, -10.0))
+            
+            coil = QPainterPath(QPointF(0.0, -10.0))
+            coil.cubicTo(QPointF(6.0, -10.0), QPointF(6.0, -4.0), QPointF(0.0, -4.0))
+            coil.cubicTo(QPointF(6.0, -4.0), QPointF(6.0, 2.0), QPointF(0.0, 2.0))
+            coil.cubicTo(QPointF(6.0, 2.0), QPointF(6.0, 8.0), QPointF(0.0, 8.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(coil)
+            
+            painter.drawLine(QPointF(0.0, 8.0), QPointF(0.0, 10.0))
+            painter.drawLine(QPointF(-7.0, 14.0), QPointF(7.0, 14.0))
+        else:
+            # Draw Capacitor symbol
+            painter.drawLine(QPointF(0.0, -16.0), QPointF(0.0, -3.0))
+            painter.drawLine(QPointF(-11.0, -3.0), QPointF(11.0, -3.0))
+            painter.drawLine(QPointF(-11.0, 3.0), QPointF(11.0, 3.0))
+            painter.drawLine(QPointF(0.0, 3.0), QPointF(0.0, 10.0))
+            painter.drawLine(QPointF(-7.0, 14.0), QPointF(7.0, 14.0))
 
 
 class GridItem(QGraphicsItem):

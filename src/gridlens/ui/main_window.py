@@ -116,31 +116,30 @@ class MainWindow(QMainWindow):
         if hasattr(solver_view, "solveRequested"):
             solver_view.solveRequested.connect(self._on_solve_requested)
         self._header.helpRequested.connect(lambda: self._switch_page("help"))
+        self._header.openRequested.connect(self._action_open)
+        self._header.saveRequested.connect(self._action_save)
 
         self._switch_page("home")
         self._update_title()
 
     # ----------------------------------------------------------------- #
-    # Menu
+    # Actions & Keyboard Shortcuts (No visible menu bar for sleek dark UI)
     # ----------------------------------------------------------------- #
     def _build_menu(self) -> None:
-        file_menu = self.menuBar().addMenu("&File")
-
+        # We add actions directly to the main window so keyboard shortcuts
+        # continue to work seamlessly, but the classical menu bar is hidden.
         def add(text: str, slot, key: QKeySequence.StandardKey | None = None) -> None:
             action = QAction(text, self)
             if key is not None:
                 action.setShortcut(key)
             action.triggered.connect(slot)
-            file_menu.addAction(action)
+            self.addAction(action)
 
         add("&New", self._action_new, QKeySequence.StandardKey.New)
         add("&Open…", self._action_open, QKeySequence.StandardKey.Open)
-        file_menu.addSeparator()
         add("&Save", self._action_save, QKeySequence.StandardKey.Save)
         add("Save &As…", self._action_save_as, QKeySequence.StandardKey.SaveAs)
-        file_menu.addSeparator()
         add("Reload &Example", self._action_reload_example)
-        file_menu.addSeparator()
         add("E&xit", self.close, QKeySequence.StandardKey.Quit)
 
     # ----------------------------------------------------------------- #
@@ -259,6 +258,20 @@ class MainWindow(QMainWindow):
         self._solution = solution
         for key in ("network", "equipment", "solver", "reports"):
             self._pages[key].set_network(network, solution)
+            
+        # Update footer totals!
+        if network is not None:
+            violations = 0
+            if solution is not None and solution.converged:
+                violations = sum(1 for b in solution.bus_results if b.violation != "ok")
+            self._footer.set_totals(
+                buses=len(network.buses),
+                lines=len(network.lines),
+                violations=violations
+            )
+        else:
+            self._footer.set_totals(buses=0, lines=0)
+            
         self.statusBar().showMessage(self._status_text())
 
     def _on_network_edited(self) -> None:

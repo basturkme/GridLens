@@ -78,3 +78,4 @@ class SolutionResult:
     max_mismatch: float
     bus_results: list[BusSolution] = field(default_factory=list)
     message: str = ""
+    mismatch_history: list[float] = field(default_factory=list)

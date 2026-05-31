@@ -97,13 +97,14 @@ def solve(
     inner_ok = False
     inner_reason = ""
     outer_ok = True
+    mismatch_hist = []
 
     for _ in range(_MAX_OUTER_ITER):
         q_net = dict(q_load_net)
         for bus, q in q_inject.items():
             q_net[bus] = q_load_net[bus] - q  # injected reactive lowers drawn Q
 
-        voltages, inner_iters, inner_mismatch, inner_ok, inner_reason = _inner_sweep(
+        voltages, inner_iters, inner_mismatch, inner_ok, inner_reason, mismatch_hist = _inner_sweep(
             order, parent, children, branch_z,
             p_net, q_net, b_shunt, v_slack, tol, max_iter,
         )
@@ -151,6 +152,7 @@ def solve(
         max_mismatch=inner_mismatch,
         bus_results=bus_results,
         message=message,
+        mismatch_history=mismatch_hist,
     )
 
 
@@ -245,6 +247,7 @@ def _inner_sweep(
     converged = False
     iterations = 0
     max_dv = 0.0
+    mismatch_history = []
     for iterations in range(1, max_iter + 1):
         prev = dict(voltages)
 
@@ -252,7 +255,7 @@ def _inner_sweep(
         for bus in order:
             mag = abs(voltages[bus])
             if not cmath.isfinite(voltages[bus]) or mag < _MIN_VOLTAGE or mag > _MAX_VOLTAGE:
-                return voltages, iterations, float("inf"), False, "diverged"
+                return voltages, iterations, float("inf"), False, "diverged", mismatch_history
 
         # Backward sweep: node current then accumulate up the tree.
         i_branch: dict[str, complex] = {}
@@ -277,13 +280,14 @@ def _inner_sweep(
             voltages[bus] = voltages[parent[bus]] - branch_z[bus] * i_branch[bus]
 
         max_dv = max(abs(voltages[b] - prev[b]) for b in order)
+        mismatch_history.append(max_dv)
         if not math.isfinite(max_dv):
-            return voltages, iterations, float("inf"), False, "diverged"
+            return voltages, iterations, float("inf"), False, "diverged", mismatch_history
         if max_dv < tol:
             converged = True
             break
 
-    return voltages, iterations, max_dv, converged, ("" if converged else "iterations")
+    return voltages, iterations, max_dv, converged, ("" if converged else "iterations"), mismatch_history
 
 
 # --------------------------------------------------------------------------- #

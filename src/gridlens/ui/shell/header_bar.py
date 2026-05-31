@@ -10,6 +10,8 @@ class HeaderBar(QFrame):
     """Top bar — brand on the left, secondary icon buttons on the right."""
 
     helpRequested = pyqtSignal()
+    openRequested = pyqtSignal()
+    saveRequested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -29,12 +31,18 @@ class HeaderBar(QFrame):
         layout.addWidget(title)
         layout.addStretch(1)
 
-        for label in ("?", "\u2709\uFE0E", "A"):
+        # Modern flat action icons (Open, Save, Help)
+        actions = [
+            ("\uD83D\uDCC1\uFE0E", "Open network file... (Ctrl+O)", self.openRequested),
+            ("\uD83D\uDCBE\uFE0E", "Save network (Ctrl+S)", self.saveRequested),
+            ("?", "Open the user manual", self.helpRequested),
+        ]
+
+        for label, tooltip, signal in actions:
             btn = QToolButton()
             btn.setObjectName("HeaderIcon")
             btn.setText(label)
+            btn.setToolTip(tooltip)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            if label == "?":
-                btn.setToolTip("Open the user manual")
-                btn.clicked.connect(self.helpRequested)
+            btn.clicked.connect(signal.emit)
             layout.addWidget(btn)

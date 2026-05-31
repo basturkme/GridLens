@@ -9,7 +9,7 @@ from gridlens.ui.views._base import PageView
 class HomeView(PageView):
     page_key = "home"
     page_title = "Welcome to GridLens"
-    breadcrumbs = ["Projects", "Home"]
+    breadcrumbs = ["Home"]
 
     openRequested = pyqtSignal()
     reloadExampleRequested = pyqtSignal()

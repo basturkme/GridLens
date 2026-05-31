@@ -3,18 +3,18 @@ from __future__ import annotations
 
 
 class Colors:
-    BRAND = "#0066CC"
-    BRAND_HOVER = "#0052A3"
-    BRAND_LIGHT = "#E6F0FA"
+    BRAND = "#3B82F6"        # Electric cobalt blue
+    BRAND_HOVER = "#60A5FA"  # Light neon blue
+    BRAND_LIGHT = "#1E293B"  # Slate-blue panel hover
 
-    BG = "#FFFFFF"
-    BG_PANEL = "#F5F7FA"
+    BG = "#0F172A"           # Obsidian black/slate background
+    BG_PANEL = "#1E293B"     # Deep slate panels
 
-    TEXT = "#212121"
-    TEXT_MUTED = "#666666"
+    TEXT = "#F8FAFC"         # Crisp slate-white text
+    TEXT_MUTED = "#94A3B8"   # Slate-gray text
 
-    BORDER = "#E0E0E0"
+    BORDER = "#334155"       # Slate border
 
-    OK = "#388E3C"
-    UNDER = "#1976D2"
-    OVER = "#D32F2F"
+    OK = "#10B981"           # Neon emerald green
+    UNDER = "#3B82F6"        # Neon blue
+    OVER = "#EF4444"         # Neon red

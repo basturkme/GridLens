@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QToolButton
+from PyQt6.QtWidgets import QSizePolicy, QToolButton
 
 
 class NavButton(QToolButton):
@@ -15,3 +15,4 @@ class NavButton(QToolButton):
         self.setAutoExclusive(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)

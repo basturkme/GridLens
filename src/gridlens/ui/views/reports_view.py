@@ -130,6 +130,19 @@ class ReportsView(PageView):
     def _draw_chart(self) -> None:
         ax = self._ax
         ax.clear()
+        
+        # Premium dark mode chart styling
+        self._figure.set_facecolor(Colors.BG)
+        ax.set_facecolor(Colors.BG_PANEL)
+        ax.spines["bottom"].set_color(Colors.BORDER)
+        ax.spines["left"].set_color(Colors.BORDER)
+        ax.spines["top"].set_color("none")
+        ax.spines["right"].set_color("none")
+        ax.tick_params(colors=Colors.TEXT_MUTED, which="both", labelsize=8)
+        ax.xaxis.label.set_color(Colors.TEXT)
+        ax.yaxis.label.set_color(Colors.TEXT)
+        ax.title.set_color(Colors.TEXT)
+        
         results = self._solution.bus_results if self._solution else []
         if results:
             xs = list(range(len(results)))

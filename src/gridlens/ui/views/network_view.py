@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import partial
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QPainter
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 from gridlens.core.models import Network, SolutionResult
 from gridlens.ui.sld import build_scene
 from gridlens.ui.sld.items import BranchItem, BusItem, TransformerItem, _EquipmentItem
+from gridlens.ui.theme.colors import Colors
 from gridlens.ui.views._base import PageView
 
 _BUS_ROLE = Qt.ItemDataRole.UserRole
@@ -45,7 +46,7 @@ class SLDView(QGraphicsView):
         self.setScene(self._scene)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
-        self.setBackgroundBrush(Qt.GlobalColor.white)
+        self.setBackgroundBrush(QColor(Colors.BG))
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
         self._bus_items: dict[str, BusItem] = {}

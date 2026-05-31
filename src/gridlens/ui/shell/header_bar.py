@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QToolButton
 
 from gridlens import __app_name__
@@ -8,6 +8,8 @@ from gridlens import __app_name__
 
 class HeaderBar(QFrame):
     """Top bar — brand on the left, secondary icon buttons on the right."""
+
+    helpRequested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -32,4 +34,7 @@ class HeaderBar(QFrame):
             btn.setObjectName("HeaderIcon")
             btn.setText(label)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if label == "?":
+                btn.setToolTip("Open the user manual")
+                btn.clicked.connect(self.helpRequested)
             layout.addWidget(btn)

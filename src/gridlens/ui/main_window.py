@@ -26,6 +26,7 @@ from gridlens.ui.shell.sidebar import Sidebar
 from gridlens.ui.views import (
     AboutView,
     EquipmentView,
+    HelpView,
     HomeView,
     NetworkView,
     ReportsView,
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow):
             ReportsView,
             SettingsView,
             AboutView,
+            HelpView,
         ):
             view = view_cls()
             self._stack.addWidget(view)
@@ -113,6 +115,7 @@ class MainWindow(QMainWindow):
         solver_view = self._pages["solver"]
         if hasattr(solver_view, "solveRequested"):
             solver_view.solveRequested.connect(self._on_solve_requested)
+        self._header.helpRequested.connect(lambda: self._switch_page("help"))
 
         self._switch_page("home")
         self._update_title()

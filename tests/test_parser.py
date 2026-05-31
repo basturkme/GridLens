@@ -187,10 +187,13 @@ def test_dangling_load_reference() -> None:
 
 
 def test_too_many_buses() -> None:
-    buses = [Bus(id=f"B{i}", is_slack=(i == 0)) for i in range(11)]
-    lines = [Line(id=f"L{i}", from_bus=f"B{i}", to_bus=f"B{i+1}") for i in range(10)]
+    from gridlens.utils.constants import MAX_BUSES
+
+    n = MAX_BUSES + 1
+    buses = [Bus(id=f"B{i}", is_slack=(i == 0)) for i in range(n)]
+    lines = [Line(id=f"L{i}", from_bus=f"B{i}", to_bus=f"B{i+1}") for i in range(n - 1)]
     net = Network(buses=buses, lines=lines)
-    with pytest.raises(ParserError, match="maximum supported is 10"):
+    with pytest.raises(ParserError, match=f"maximum supported is {MAX_BUSES}"):
         validate_network(net)
 
 

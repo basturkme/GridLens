@@ -72,6 +72,22 @@ class BusSolution:
 
 
 @dataclass
+class SweepStep:
+    """One inner backward-forward sweep iteration, tagged with the outer
+    Q-compensation pass it belongs to.
+
+    ``pinned_err`` is the worst pinned-bus voltage error (|v_set - |V||) measured
+    at the *end* of an outer pass; it is None for inner iterations that are not a
+    pass boundary and for networks without voltage-controlled (pinned) buses.
+    """
+
+    outer: int
+    inner: int
+    max_dv: float
+    pinned_err: float | None = None
+
+
+@dataclass
 class SolutionResult:
     converged: bool
     iterations: int
@@ -79,3 +95,12 @@ class SolutionResult:
     bus_results: list[BusSolution] = field(default_factory=list)
     message: str = ""
     mismatch_history: list[float] = field(default_factory=list)
+    # Full solve trajectory across every outer Q-compensation pass (the table on
+    # the Solver page renders this); ``mismatch_history`` above stays as the inner
+    # history of the final pass for backwards compatibility.
+    steps: list[SweepStep] = field(default_factory=list)
+    outer_iterations: int = 1
+    # Reactive power (kvar) the outer loop had to inject at each pinned bus to
+    # hold its target |V| — i.e. the reactive support that sizing a capacitor /
+    # SVC there would need to provide. Empty when no bus is voltage-pinned.
+    pinned_q_inject_kvar: dict[str, float] = field(default_factory=dict)

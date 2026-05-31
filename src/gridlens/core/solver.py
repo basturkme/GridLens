@@ -32,7 +32,7 @@ import cmath
 import math
 from collections import defaultdict, deque
 
-from gridlens.core.models import BusSolution, Network, SolutionResult
+from gridlens.core.models import BusSolution, Network, SolutionResult, SweepStep
 from gridlens.utils.constants import (
     DEFAULT_MAX_ITER,
     DEFAULT_TOLERANCE_PU,
@@ -98,8 +98,16 @@ def solve(
     inner_reason = ""
     outer_ok = True
     mismatch_hist = []
+    steps: list[SweepStep] = []
+    outer_idx = 0
+    q_used: dict[str, float] = dict(q_inject)
 
     for _ in range(_MAX_OUTER_ITER):
+        outer_idx += 1
+        # Snapshot the injection feeding *this* sweep; it is what produced the
+        # voltages we ultimately report (the post-sweep nudge below only matters
+        # if another pass runs).
+        q_used = dict(q_inject)
         q_net = dict(q_load_net)
         for bus, q in q_inject.items():
             q_net[bus] = q_load_net[bus] - q  # injected reactive lowers drawn Q
@@ -108,12 +116,20 @@ def solve(
             order, parent, children, branch_z,
             p_net, q_net, b_shunt, v_slack, tol, max_iter,
         )
+        # Record this pass's inner sweep as part of the full trajectory.
+        for j, dv_inner in enumerate(mismatch_hist, start=1):
+            steps.append(SweepStep(outer=outer_idx, inner=j, max_dv=dv_inner))
         if not inner_ok:
             outer_ok = False
             break
         if not pinned:
             break
 
+        # Tag the last inner step of this pass with the pinned-voltage error,
+        # then nudge the injected Q toward holding each pinned |V|.
+        pinned_err = max(abs(v_set - abs(voltages[bus])) for bus, v_set in pinned.items())
+        if steps:
+            steps[-1].pinned_err = pinned_err
         outer_ok = True
         for bus, v_set in pinned.items():
             dv = v_set - abs(voltages[bus])
@@ -153,6 +169,9 @@ def solve(
         bus_results=bus_results,
         message=message,
         mismatch_history=mismatch_hist,
+        steps=steps,
+        outer_iterations=outer_idx,
+        pinned_q_inject_kvar={bus: q_used.get(bus, 0.0) * s_base_kw for bus in pinned},
     )
 
 

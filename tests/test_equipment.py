@@ -182,27 +182,23 @@ def test_heavier_load_through_shell_lowers_voltage(qapp) -> None:
     assert v_after < v_before
 
 
-def test_clicking_bus_on_diagram_opens_equipment_editor(qapp) -> None:
+def test_clicking_bus_on_diagram_highlights_without_navigating(qapp) -> None:
     from gridlens.ui.main_window import MainWindow
 
     net = _demo()
     win = MainWindow()
     win.set_network(net, solve(net))
+    start_page = win._stack.currentWidget()
 
     # Simulate selecting a bus on the Network diagram.
     win._pages["network"]._sld._bus_items["B4"].setSelected(True)
 
-    # The shell should now be on the Equipment page with B4's editor open.
-    assert win._stack.currentWidget() is win._pages["equipment"]
-    eq = win._pages["equipment"]
-    current = eq._tree.currentItem()
-    assert current is not None
-    from gridlens.ui.views.equipment_view import _ID_ROLE, _KIND_ROLE
-
-    assert current.data(0, _KIND_ROLE) == "bus"
-    assert current.data(0, _ID_ROLE) == "B4"
-    # A bus editor exposes the live "Solved |V|" readout for that bus.
-    assert eq._voltage_bus_id == "B4"
+    # A bus click highlights the bus and reports it on the status bar, but
+    # navigation to the Equipment editor is reserved for equipment symbols /
+    # the Details button (see MainWindow._on_bus_picked) — so the page stays put.
+    assert win._stack.currentWidget() is start_page
+    assert win._stack.currentWidget() is not win._pages["equipment"]
+    assert "B4" in win.statusBar().currentMessage()
 
 
 def test_clicking_equipment_symbol_opens_its_editor(qapp) -> None:

@@ -298,7 +298,13 @@ class MainWindow(QMainWindow):
         refreshed via apply_solution (which keeps the open form/focus) while a
         full edit is in progress; otherwise it is rebuilt like the rest."""
         self._pages["network"].set_network(self._network, self._solution)
-        self._pages["solver"].set_network(self._network, self._solution)
+        # A re-solve keeps the same network, so append this run to the solver's
+        # accumulated history instead of calling set_network (which would clear
+        # the table and reset the run counter, wiping the history every solve).
+        if self._solution is not None:
+            self._pages["solver"].show_result(self._solution)
+        else:
+            self._pages["solver"].set_network(self._network, self._solution)
         self._pages["reports"].set_network(self._network, self._solution)
         if preserve_equipment_focus:
             self._pages["equipment"].apply_solution(self._solution)

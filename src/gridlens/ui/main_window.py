@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QMainWindow,
+    QMessageBox,
     QStackedWidget,
     QStatusBar,
     QVBoxLayout,
@@ -10,8 +15,10 @@ from PyQt6.QtWidgets import (
 )
 
 from gridlens import __app_name__
-from gridlens.core import solve
+from gridlens._resources import default_example
+from gridlens.core import load_network, save_network, solve
 from gridlens.core.models import Network, SolutionResult
+from gridlens.core.parser import ParserError
 from gridlens.ui.shell.footer import Footer
 from gridlens.ui.shell.header_bar import HeaderBar
 from gridlens.ui.shell.sidebar import Sidebar
@@ -25,13 +32,14 @@ from gridlens.ui.views import (
     SolverView,
 )
 
+_FILE_FILTER = "GridLens network (*.json);;All files (*)"
+
 
 class MainWindow(QMainWindow):
     """Top-level shell — header + sidebar + central stack + footer."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"{__app_name__} — Distribution Feeder Analyzer")
         self.resize(1280, 800)
 
         # ----- Central layout -----
@@ -80,6 +88,10 @@ class MainWindow(QMainWindow):
 
         self._network: Network | None = None
         self._solution: SolutionResult | None = None
+        self._current_path: Path | None = None
+        self._dirty = False
+
+        self._build_menu()
 
         # ----- Wiring -----
         self._sidebar.pageChanged.connect(self._switch_page)
@@ -89,8 +101,142 @@ class MainWindow(QMainWindow):
         equipment_view = self._pages["equipment"]
         if hasattr(equipment_view, "networkEdited"):
             equipment_view.networkEdited.connect(self._on_network_edited)
-        self._switch_page("home")
+        home_view = self._pages["home"]
+        if hasattr(home_view, "openRequested"):
+            home_view.openRequested.connect(self._action_open)
+            home_view.reloadExampleRequested.connect(self._action_reload_example)
 
+        self._switch_page("home")
+        self._update_title()
+
+    # ----------------------------------------------------------------- #
+    # Menu
+    # ----------------------------------------------------------------- #
+    def _build_menu(self) -> None:
+        file_menu = self.menuBar().addMenu("&File")
+
+        def add(text: str, slot, key: QKeySequence.StandardKey | None = None) -> None:
+            action = QAction(text, self)
+            if key is not None:
+                action.setShortcut(key)
+            action.triggered.connect(slot)
+            file_menu.addAction(action)
+
+        add("&New", self._action_new, QKeySequence.StandardKey.New)
+        add("&Open…", self._action_open, QKeySequence.StandardKey.Open)
+        file_menu.addSeparator()
+        add("&Save", self._action_save, QKeySequence.StandardKey.Save)
+        add("Save &As…", self._action_save_as, QKeySequence.StandardKey.SaveAs)
+        file_menu.addSeparator()
+        add("Reload &Example", self._action_reload_example)
+        file_menu.addSeparator()
+        add("E&xit", self.close, QKeySequence.StandardKey.Quit)
+
+    # ----------------------------------------------------------------- #
+    # Core file operations (dialog-free — directly unit-testable)
+    # ----------------------------------------------------------------- #
+    def open_path(self, path: str | Path) -> None:
+        """Load + validate + solve a network from disk and display it.
+
+        Raises ParserError if the file is malformed; the current network is left
+        untouched in that case.
+        """
+        network = load_network(path)  # raises ParserError before any UI change
+        self.set_network(network, solve(network))
+        self._current_path = Path(path)
+        self._set_dirty(False)
+
+    def save_to(self, path: str | Path) -> None:
+        """Serialize the current network to disk and mark it clean."""
+        if self._network is None:
+            return
+        save_network(self._network, path)
+        self._current_path = Path(path)
+        self._set_dirty(False)
+
+    def new_network(self) -> None:
+        """Clear the workspace to an empty state."""
+        self.set_network(None)
+        self._current_path = None
+        self._set_dirty(False)
+
+    def load_startup_example(self) -> bool:
+        """Best-effort open of the bundled example so the app opens populated.
+        Returns True if a network was loaded."""
+        path = default_example()
+        if path is None:
+            return False
+        try:
+            self.open_path(path)
+            return True
+        except (ParserError, OSError):
+            return False
+
+    # ----------------------------------------------------------------- #
+    # Menu/dialog action handlers
+    # ----------------------------------------------------------------- #
+    def _action_new(self) -> None:
+        if not self._confirm_discard():
+            return
+        self.new_network()
+
+    def _action_open(self) -> None:
+        if not self._confirm_discard():
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open network file", self._dialog_dir(), _FILE_FILTER
+        )
+        if not path:
+            return
+        try:
+            self.open_path(path)
+        except (ParserError, OSError) as exc:
+            QMessageBox.critical(self, "Could not open file", str(exc))
+
+    def _action_save(self) -> bool:
+        if self._network is None:
+            return False
+        if self._current_path is None:
+            return self._action_save_as()
+        try:
+            self.save_to(self._current_path)
+            return True
+        except OSError as exc:
+            QMessageBox.critical(self, "Could not save file", str(exc))
+            return False
+
+    def _action_save_as(self) -> bool:
+        if self._network is None:
+            return False
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save network as", self._dialog_dir(), _FILE_FILTER
+        )
+        if not path:
+            return False
+        try:
+            self.save_to(path)
+            return True
+        except OSError as exc:
+            QMessageBox.critical(self, "Could not save file", str(exc))
+            return False
+
+    def _action_reload_example(self) -> None:
+        if not self._confirm_discard():
+            return
+        path = default_example()
+        if path is None:
+            QMessageBox.information(
+                self, "No example available", "The bundled example was not found."
+            )
+            return
+        try:
+            self.open_path(path)
+        except (ParserError, OSError) as exc:
+            QMessageBox.critical(self, "Could not open example", str(exc))
+
+    # ----------------------------------------------------------------- #
+    # Network display + live re-solve
+    # ----------------------------------------------------------------- #
     def set_network(
         self, network: Network | None, solution: SolutionResult | None = None
     ) -> None:
@@ -108,6 +254,7 @@ class MainWindow(QMainWindow):
         self._solution = solve(self._network)
         self._pages["network"].set_network(self._network, self._solution)
         self._pages["equipment"].apply_solution(self._solution)
+        self._set_dirty(True)
         self.statusBar().showMessage(self._status_text())
 
     def _status_text(self) -> str:
@@ -138,3 +285,52 @@ class MainWindow(QMainWindow):
             return
         self._stack.setCurrentWidget(page)
         self._sidebar.select(key)
+
+    # ----------------------------------------------------------------- #
+    # Dirty state / title / discard guard
+    # ----------------------------------------------------------------- #
+    def _set_dirty(self, dirty: bool) -> None:
+        self._dirty = dirty
+        self.setWindowModified(dirty)
+        self._update_title()
+
+    def _update_title(self) -> None:
+        if self._current_path is not None:
+            name = self._current_path.name
+        elif self._network is not None:
+            name = self._network.name or "Untitled"
+        else:
+            name = "No file"
+        # The [*] placeholder is shown only while setWindowModified(True).
+        self.setWindowTitle(f"{__app_name__} — {name}[*] — Distribution Feeder Analyzer")
+
+    def _dialog_dir(self) -> str:
+        if self._current_path is not None:
+            return str(self._current_path.parent)
+        example = default_example()
+        return str(example.parent) if example is not None else ""
+
+    def _confirm_discard(self) -> bool:
+        """Returns True if it's safe to proceed (discard or saved), False if the
+        user cancelled."""
+        if not self._dirty or self._network is None:
+            return True
+        choice = QMessageBox.warning(
+            self,
+            "Unsaved changes",
+            "The current network has unsaved changes. Save them first?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+        )
+        if choice == QMessageBox.StandardButton.Save:
+            return self._action_save()
+        if choice == QMessageBox.StandardButton.Discard:
+            return True
+        return False
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        if self._confirm_discard():
+            event.accept()
+        else:
+            event.ignore()

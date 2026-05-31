@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from gridlens.ui.views._base import PageView
@@ -10,6 +10,9 @@ class HomeView(PageView):
     page_key = "home"
     page_title = "Welcome to GridLens"
     breadcrumbs = ["Projects", "Home"]
+
+    openRequested = pyqtSignal()
+    reloadExampleRequested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -28,12 +31,11 @@ class HomeView(PageView):
         actions = QHBoxLayout()
         open_btn = QPushButton("Open Network File…")
         open_btn.setObjectName("PrimaryButton")
-        recent_btn = QPushButton("Recent")
-        recent_btn.setObjectName("SecondaryButton")
-        examples_btn = QPushButton("Browse Examples")
+        open_btn.clicked.connect(self.openRequested)
+        examples_btn = QPushButton("Load Example Feeder")
         examples_btn.setObjectName("SecondaryButton")
+        examples_btn.clicked.connect(self.reloadExampleRequested)
         actions.addWidget(open_btn)
-        actions.addWidget(recent_btn)
         actions.addWidget(examples_btn)
         actions.addStretch(1)
         layout.addSpacing(16)

@@ -16,12 +16,14 @@ adjust loads or switch a capacitor in or out, and read the result instantly.
 - On-the-fly editing of loads, generators, capacitor banks, and leaf-bus voltage,
   with the network re-solved and the diagram refreshed live
 - Automatic highlighting of voltage-magnitude violations (undervoltage / overvoltage)
+- Solver page with adjustable tolerance / iteration limit and a convergence log
+- Reports page with a results table, a voltage-profile chart, and CSV export
 - Open / Save / New file workflow with input validation and clear error messages
 - Targets a single-file portable Windows executable
 
 ## Status
 
-Implemented through Sprint 5:
+Implemented through Sprint 6:
 
 | Area | State |
 |------|-------|
@@ -30,10 +32,11 @@ Implemented through Sprint 5:
 | Single-line-diagram rendering | Done |
 | On-the-fly equipment editor | Done |
 | File management (Open / Save / New) | Done |
-| Solver and Reports views, packaging, manual/infographic | Planned (see `docs/SPRINT_PLAN.md`) |
+| Solver page and Reports page (table, chart, CSV) | Done |
+| Packaging, user manual, infographic | Planned (see `docs/SPRINT_PLAN.md`) |
 
-The automated test suite (parser, solver, diagram, equipment editing, file I/O)
-currently has 54 passing tests.
+The automated test suite (parser, solver, diagram, equipment editing, file I/O,
+solver and reports views) currently has 62 passing tests.
 
 ## Quick Start (Development)
 
@@ -161,7 +164,30 @@ number (or is out of range), the field turns red, a tooltip explains why, and
 the value is not applied until it is corrected. Line parameters (R, X, B) are
 fixed network data and are shown read-only.
 
-## 5. Interpreting the results
+## 5. Running the solver
+
+The solver runs automatically when a network is loaded and after every edit, so
+you normally do not need to trigger it. The Solver page gives you manual control
+and feedback:
+
+- Adjust Tolerance (per unit) and Max iterations if you need a tighter or looser
+  solve, then click "Run Power Flow".
+- The convergence log reports whether the solve converged, how many iterations
+  it took, the final mismatch, the number of voltage violations, and the lowest
+  bus voltage. Any tolerance or iteration limit you set here is also used by the
+  automatic re-solves that follow your edits.
+
+## 6. Reports and export
+
+The Reports page presents the latest solution two ways:
+
+- A results table listing every bus with its voltage magnitude (per unit and in
+  kV), angle, and status; buses out of band are coloured.
+- A voltage-profile chart of |V| across the feeder, with dashed lines marking
+  the allowed band so low or high buses stand out at a glance.
+- "Export CSV" saves the table to a file for use in a report or spreadsheet.
+
+## 7. Interpreting the results
 
 - The status bar summarises the last solve: number of iterations, and the count
   of buses with a voltage violation.
@@ -172,7 +198,7 @@ fixed network data and are shown read-only.
   Equipment page reduce a load, switch a capacitor in, or adjust generation, and
   watch the colours and voltages update until every bus is green.
 
-## 6. Saving your work
+## 8. Saving your work
 
 - File menu > Save (Ctrl+S) writes back to the current file.
 - File menu > Save As... (Ctrl+Shift+S) writes to a new file.

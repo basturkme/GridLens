@@ -19,6 +19,7 @@ from gridlens._resources import default_example
 from gridlens.core import load_network, save_network, solve
 from gridlens.core.models import Network, SolutionResult
 from gridlens.core.parser import ParserError
+from gridlens.utils.constants import DEFAULT_MAX_ITER, DEFAULT_TOLERANCE_PU
 from gridlens.ui.shell.footer import Footer
 from gridlens.ui.shell.header_bar import HeaderBar
 from gridlens.ui.shell.sidebar import Sidebar
@@ -90,6 +91,8 @@ class MainWindow(QMainWindow):
         self._solution: SolutionResult | None = None
         self._current_path: Path | None = None
         self._dirty = False
+        self._tol = DEFAULT_TOLERANCE_PU
+        self._max_iter = DEFAULT_MAX_ITER
 
         self._build_menu()
 
@@ -105,6 +108,9 @@ class MainWindow(QMainWindow):
         if hasattr(home_view, "openRequested"):
             home_view.openRequested.connect(self._action_open)
             home_view.reloadExampleRequested.connect(self._action_reload_example)
+        solver_view = self._pages["solver"]
+        if hasattr(solver_view, "solveRequested"):
+            solver_view.solveRequested.connect(self._on_solve_requested)
 
         self._switch_page("home")
         self._update_title()
@@ -243,19 +249,40 @@ class MainWindow(QMainWindow):
         """Load a network into the views that consume it."""
         self._network = network
         self._solution = solution
-        self._pages["network"].set_network(network, solution)
-        self._pages["equipment"].set_network(network, solution)
+        for key in ("network", "equipment", "solver", "reports"):
+            self._pages[key].set_network(network, solution)
         self.statusBar().showMessage(self._status_text())
 
     def _on_network_edited(self) -> None:
         """An equipment value changed — re-solve and refresh the views live."""
         if self._network is None:
             return
-        self._solution = solve(self._network)
-        self._pages["network"].set_network(self._network, self._solution)
-        self._pages["equipment"].apply_solution(self._solution)
+        self._solution = solve(self._network, tol=self._tol, max_iter=self._max_iter)
+        self._refresh_solution_views(preserve_equipment_focus=True)
         self._set_dirty(True)
         self.statusBar().showMessage(self._status_text())
+
+    def _on_solve_requested(self, tol: float, max_iter: int) -> None:
+        """The Solver page asked to re-run with explicit tolerance / iterations."""
+        if self._network is None:
+            return
+        self._tol = tol
+        self._max_iter = max_iter
+        self._solution = solve(self._network, tol=tol, max_iter=max_iter)
+        self._refresh_solution_views(preserve_equipment_focus=False)
+        self.statusBar().showMessage(self._status_text())
+
+    def _refresh_solution_views(self, *, preserve_equipment_focus: bool) -> None:
+        """Push the current solution to every view. The equipment editor is
+        refreshed via apply_solution (which keeps the open form/focus) while a
+        full edit is in progress; otherwise it is rebuilt like the rest."""
+        self._pages["network"].set_network(self._network, self._solution)
+        self._pages["solver"].set_network(self._network, self._solution)
+        self._pages["reports"].set_network(self._network, self._solution)
+        if preserve_equipment_focus:
+            self._pages["equipment"].apply_solution(self._solution)
+        else:
+            self._pages["equipment"].set_network(self._network, self._solution)
 
     def _status_text(self) -> str:
         if self._network is None:

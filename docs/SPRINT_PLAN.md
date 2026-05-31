@@ -21,13 +21,14 @@ manual, and a one-page infographic.
 | 2 | BFS power-flow solver | ✅ Done | `3d715ec` |
 | 3 | Single-line-diagram rendering | ✅ Done | `f42a05f`, `de4112e` |
 | 4 | On-the-fly equipment editor | ✅ Done | `4b37492` |
-| 5 | File management (Open / Save / New) | ⏳ Planned | — |
-| 6 | Solver view + Reports view | ⏳ Planned | — |
-| 7 | Robustness & UX hardening | ⏳ Planned | — |
+| 5 | File management (Open / Save / New) | ✅ Done | `1f5adb7` |
+| 6 | Solver view + Reports view | ✅ Done | `f3d40ec` |
+| 7 | Robustness & UX hardening | ✅ Done | (pending commit) |
 | 8 | Portable `.exe` packaging | ⏳ Planned | — |
 | 9 | User manual + infographic | ⏳ Planned | — |
 
-Test suite at end of Sprint 4: **46 passing** (parser, solver, SLD, equipment).
+Test suite at end of Sprint 7: **69 passing** (parser, solver, SLD, equipment,
+file I/O, solver/reports views, robustness).
 
 ---
 
@@ -72,46 +73,40 @@ Test suite at end of Sprint 4: **46 passing** (parser, solver, SLD, equipment).
   refreshes the SLD + live `|V|` readout + status bar instantly.
 - Invalid input shows a red field and never corrupts the model.
 
+### Sprint 5 — File management (Open / Save / New) ✅
+**Goal:** turn the demo-only loader into a real document workflow.
+- File menu (New / Open / Save / Save As / Reload Example) with standard
+  shortcuts; Home-page buttons wired through signals.
+- Dialog-free, unit-testable core ops (`open_path`, `save_to`, `new_network`,
+  `load_startup_example`); `QFileDialog` wrappers with `QMessageBox` errors that
+  reuse the `ParserError` text.
+- Dirty-state tracking, title-bar file name + `[*]` modified marker, and a
+  Save/Discard/Cancel guard on New/Open/Reload/Close.
+
+### Sprint 6 — Solver view + Reports view ✅
+**Goal:** make results first-class, beyond the SLD tint.
+- **SolverView:** "Run Power Flow" with tolerance / max-iteration controls and a
+  convergence log (status, iterations, mismatch, violations, lowest |V|); the
+  chosen parameters also drive subsequent live re-solves.
+- **ReportsView:** results table (bus, |V| pu, angle°, |V| kV, status) with
+  violation colouring, a matplotlib voltage-profile chart with band lines, and
+  CSV export.
+- The shell distributes each solution to network / equipment / solver / reports.
+
+### Sprint 7 — Robustness & UX hardening ✅
+**Goal:** behave like a product under bad input and edge cases (Professionalism 30%).
+- Solver no longer raises on pathological operating points: a sweep that
+  collapses to zero, goes non-finite, or runs away (|V| > 1000 pu) returns
+  `converged=False` with a clear reason (diverged / iteration-limit / pinned-not-held);
+  non-finite voltages report as NaN.
+- Network page shows a red non-convergence warning banner carrying the solver
+  message; the status bar mirrors it.
+- Edge cases (single-bus, no-load, extreme edits through the editor) handled
+  without crashing; broadened unhappy-path tests.
+
 ---
 
 ## Planned sprints
-
-### Sprint 5 — File management (Open / Save / New)
-**Goal:** turn the demo-only loader into a real document workflow.
-**Scope:**
-- Header/toolbar actions + menu: **Open…**, **Save**, **Save As…**, **New**,
-  and reload the bundled example.
-- `QFileDialog` wired to `load_network` / `save_network`; friendly error
-  dialogs on parse/validation failure (reuse `ParserError` messages).
-- Track current file path + unsaved-changes (dirty) flag; reflect in the title
-  bar; prompt to save on close/replace.
-- Recent-files list (optional).
-**Deliverables:** `OpenSave` controller, dialogs, dirty-state tracking, tests
-for the load/save round-trip through the controller.
-**Why now:** required to test with the grader's own data files.
-
-### Sprint 6 — Solver view + Reports view
-**Goal:** make results first-class, beyond the SLD tint.
-**Scope:**
-- **SolverView:** "Run power flow" action, convergence/iteration/mismatch
-  readout, full results table (bus, |V| pu, angle°, violation) with row
-  highlighting, sortable; tolerance / max-iter controls.
-- **ReportsView:** voltage-profile chart along the feeder using **matplotlib**
-  (the one place it's the right tool), violation summary, exportable.
-- Both consume the shared solution; "Run" re-solves on demand.
-**Deliverables:** populated Solver and Reports views, results model, chart
-widget, headless tests for the results table + summary.
-
-### Sprint 7 — Robustness & UX hardening
-**Goal:** behave like a product under bad input and edge cases (Professionalism 30%).
-**Scope:**
-- Non-convergence and singular-network handling surfaced clearly in the UI.
-- Empty/partial networks, single-bus networks, missing slack, out-of-range
-  edits — all degrade gracefully.
-- Keyboard navigation, focus order, status messaging, units labelled
-  consistently; confirm-before-discard.
-- Broaden tests for the unhappy paths.
-**Deliverables:** hardened views, error surfacing, expanded test coverage.
 
 ### Sprint 8 — Portable `.exe` packaging
 **Goal:** ship a single Windows-11 portable executable (requirement viii).

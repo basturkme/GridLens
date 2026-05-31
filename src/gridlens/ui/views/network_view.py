@@ -5,6 +5,7 @@ from PyQt6.QtGui import QPainter
 from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
+    QLabel,
     QLineEdit,
     QSplitter,
     QTreeWidget,
@@ -95,6 +96,12 @@ class NetworkView(PageView):
         layout = QVBoxLayout(body)
         layout.setSpacing(12)
 
+        self._warning = QLabel()
+        self._warning.setObjectName("WarningBanner")
+        self._warning.setWordWrap(True)
+        self._warning.hide()
+        layout.addWidget(self._warning)
+
         self._search = QLineEdit()
         self._search.setObjectName("FilterInput")
         self._search.setPlaceholderText("Filter buses / equipment by name…")
@@ -131,6 +138,12 @@ class NetworkView(PageView):
             self._title.setText(f"Network: {network.name or 'Untitled'}")
         else:
             self._title.setText(self.page_title)
+
+        if solution is not None and not solution.converged:
+            self._warning.setText(f"Power flow did not converge. {solution.message}")
+            self._warning.show()
+        else:
+            self._warning.hide()
 
     # -- tree --------------------------------------------------------------- #
     def _populate_tree(

@@ -19,11 +19,13 @@ adjust loads or switch a capacitor in or out, and read the result instantly.
 - Solver page with adjustable tolerance / iteration limit and a convergence log
 - Reports page with a results table, a voltage-profile chart, and CSV export
 - Open / Save / New file workflow with input validation and clear error messages
+- Graceful handling of unsolvable or extreme operating points, with a clear
+  non-convergence warning instead of a crash
 - Targets a single-file portable Windows executable
 
 ## Status
 
-Implemented through Sprint 6:
+Implemented through Sprint 7:
 
 | Area | State |
 |------|-------|
@@ -33,10 +35,11 @@ Implemented through Sprint 6:
 | On-the-fly equipment editor | Done |
 | File management (Open / Save / New) | Done |
 | Solver page and Reports page (table, chart, CSV) | Done |
+| Robustness and graceful degradation | Done |
 | Packaging, user manual, infographic | Planned (see `docs/SPRINT_PLAN.md`) |
 
 The automated test suite (parser, solver, diagram, equipment editing, file I/O,
-solver and reports views) currently has 62 passing tests.
+solver and reports views, robustness) currently has 69 passing tests.
 
 ## Quick Start (Development)
 
@@ -197,6 +200,11 @@ The Reports page presents the latest solution two ways:
 - A typical workflow: load the feeder, look for blue or red buses, then on the
   Equipment page reduce a load, switch a capacitor in, or adjust generation, and
   watch the colours and voltages update until every bus is green.
+- If an operating point is beyond what the feeder can supply (for example, an
+  unrealistically large load), the solver cannot converge. GridLens does not
+  crash: a red warning banner appears on the Network page and the status bar
+  explains that the power flow did not converge. Reduce the load (or relax the
+  pinned voltage) and the solution recovers.
 
 ## 8. Saving your work
 

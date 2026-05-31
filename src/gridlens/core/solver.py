@@ -43,6 +43,12 @@ from gridlens.utils.constants import (
 _MAX_OUTER_ITER = 40
 _OUTER_DAMPING = 0.8
 
+# Divergence guards: a radial sweep that runs away (a bus voltage collapsing to
+# zero or blowing up) means the operating point is beyond the feeder's
+# loadability. Detect it and report non-convergence instead of raising.
+_MIN_VOLTAGE = 1e-9
+_MAX_VOLTAGE = 1e3  # any per-unit voltage this large means the sweep is running away
+
 
 def solve(
     network: Network,
@@ -89,6 +95,7 @@ def solve(
     inner_iters = 0
     inner_mismatch = 0.0
     inner_ok = False
+    inner_reason = ""
     outer_ok = True
 
     for _ in range(_MAX_OUTER_ITER):
@@ -96,7 +103,7 @@ def solve(
         for bus, q in q_inject.items():
             q_net[bus] = q_load_net[bus] - q  # injected reactive lowers drawn Q
 
-        voltages, inner_iters, inner_mismatch, inner_ok = _inner_sweep(
+        voltages, inner_iters, inner_mismatch, inner_ok, inner_reason = _inner_sweep(
             order, parent, children, branch_z,
             p_net, q_net, b_shunt, v_slack, tol, max_iter,
         )
@@ -122,10 +129,22 @@ def solve(
         for b in network.buses
     ]
     converged = inner_ok and outer_ok
-    message = (
-        "Converged." if converged
-        else "Did not converge within iteration limit."
-    )
+    if converged:
+        message = "Converged."
+    elif not inner_ok:
+        if inner_reason == "diverged":
+            message = (
+                "Solver diverged — the operating point may be beyond the "
+                "feeder's loadability (check loads, generation, or the pinned "
+                "leaf voltage)."
+            )
+        else:
+            message = "Did not converge within the iteration limit."
+    else:
+        message = (
+            "Pinned leaf voltage could not be held within tolerance; showing "
+            "the closest result."
+        )
     return SolutionResult(
         converged=converged,
         iterations=inner_iters,
@@ -229,6 +248,12 @@ def _inner_sweep(
     for iterations in range(1, max_iter + 1):
         prev = dict(voltages)
 
+        # Bail out before dividing by a collapsed / runaway voltage.
+        for bus in order:
+            mag = abs(voltages[bus])
+            if not cmath.isfinite(voltages[bus]) or mag < _MIN_VOLTAGE or mag > _MAX_VOLTAGE:
+                return voltages, iterations, float("inf"), False, "diverged"
+
         # Backward sweep: node current then accumulate up the tree.
         i_branch: dict[str, complex] = {}
         node_current: dict[str, complex] = {}
@@ -252,11 +277,13 @@ def _inner_sweep(
             voltages[bus] = voltages[parent[bus]] - branch_z[bus] * i_branch[bus]
 
         max_dv = max(abs(voltages[b] - prev[b]) for b in order)
+        if not math.isfinite(max_dv):
+            return voltages, iterations, float("inf"), False, "diverged"
         if max_dv < tol:
             converged = True
             break
 
-    return voltages, iterations, max_dv, converged
+    return voltages, iterations, max_dv, converged, ("" if converged else "iterations")
 
 
 # --------------------------------------------------------------------------- #
@@ -264,7 +291,7 @@ def _inner_sweep(
 # --------------------------------------------------------------------------- #
 def _bus_solution(bus_id: str, v: complex) -> BusSolution:
     mag = abs(v)
-    if math.isnan(mag):
+    if not math.isfinite(mag):
         return BusSolution(bus_id=bus_id, v_pu=float("nan"), angle_deg=float("nan"))
     angle = math.degrees(cmath.phase(v))
     if mag < V_MIN_PU:

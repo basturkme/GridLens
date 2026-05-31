@@ -192,3 +192,13 @@ QLineEdit[invalid="true"] {
     border: 1px solid #D32F2F;
     background-color: #FFF5F5;
 }
+
+/* ----- Non-convergence warning banner ----- */
+QLabel#WarningBanner {
+    color: #D32F2F;
+    background-color: #FFF5F5;
+    border: 1px solid #D32F2F;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-weight: 600;
+}

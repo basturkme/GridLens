@@ -202,3 +202,18 @@ QLabel#WarningBanner {
     padding: 8px 12px;
     font-weight: 600;
 }
+
+/* ----- Details (eye) button in network tree ----- */
+QPushButton#DetailsButton {
+    background: transparent;
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    font-size: 12px;
+    padding: 0px;
+    color: #666666;
+}
+QPushButton#DetailsButton:hover {
+    background-color: #E6F0FA;
+    border-color: #0066CC;
+    color: #0066CC;
+}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPainter
 from PyQt6.QtWidgets import (
@@ -7,6 +9,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -20,6 +23,8 @@ from gridlens.ui.sld.items import BusItem, _EquipmentItem
 from gridlens.ui.views._base import PageView
 
 _BUS_ROLE = Qt.ItemDataRole.UserRole
+_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
+_ID_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class SLDView(QGraphicsView):
@@ -116,8 +121,16 @@ class NetworkView(PageView):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._tree = QTreeWidget()
-        self._tree.setHeaderLabel("Network")
-        self._tree.setMinimumWidth(240)
+        self._tree.setColumnCount(2)
+        self._tree.setHeaderLabels(["Network", ""])
+        self._tree.setMinimumWidth(280)
+        self._tree.header().setStretchLastSection(False)
+        self._tree.header().setSectionResizeMode(
+            0, self._tree.header().ResizeMode.Stretch
+        )
+        self._tree.header().setSectionResizeMode(
+            1, self._tree.header().ResizeMode.ResizeToContents
+        )
         self._tree.itemClicked.connect(self._on_tree_clicked)
         splitter.addWidget(self._tree)
 
@@ -166,6 +179,23 @@ class NetworkView(PageView):
             else {}
         )
 
+        def _add_equipment(
+            parent: QTreeWidgetItem, label: str, kind: str, obj_id: str
+        ) -> QTreeWidgetItem:
+            """Add an equipment child with kind/id metadata and a Details button."""
+            node = QTreeWidgetItem(parent, [label])
+            node.setData(0, _KIND_ROLE, kind)
+            node.setData(0, _ID_ROLE, obj_id)
+
+            btn = QPushButton("\U0001F441")  # 👁 eye icon
+            btn.setObjectName("DetailsButton")
+            btn.setToolTip("Details")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedSize(28, 22)
+            btn.clicked.connect(partial(self._on_details_clicked, kind, obj_id))
+            self._tree.setItemWidget(node, 1, btn)
+            return node
+
         # Category names mirror the Equipment page for consistency.
         buses = QTreeWidgetItem(self._tree, ["Buses"])
         for bus in network.buses:
@@ -175,23 +205,33 @@ class NetworkView(PageView):
                 label += f"   {sol.v_pu:.3f} pu"
             node = QTreeWidgetItem(buses, [label])
             node.setData(0, _BUS_ROLE, bus.id)
+            node.setData(0, _KIND_ROLE, "bus")
+            node.setData(0, _ID_ROLE, bus.id)
+
+            btn = QPushButton("\U0001F441")  # 👁 eye icon
+            btn.setObjectName("DetailsButton")
+            btn.setToolTip("Details")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedSize(28, 22)
+            btn.clicked.connect(partial(self._on_details_clicked, "bus", bus.id))
+            self._tree.setItemWidget(node, 1, btn)
 
         lines = QTreeWidgetItem(self._tree, ["Lines"])
         for ln in network.lines:
-            QTreeWidgetItem(lines, [f"{ln.id}: {ln.from_bus} → {ln.to_bus}"])
+            _add_equipment(lines, f"{ln.id}: {ln.from_bus} → {ln.to_bus}", "line", ln.id)
 
         loads = QTreeWidgetItem(self._tree, ["Loads"])
         for load in network.loads:
-            QTreeWidgetItem(loads, [f"{load.id} @ {load.bus}"])
+            _add_equipment(loads, f"{load.id} @ {load.bus}", "load", load.id)
 
         gens = QTreeWidgetItem(self._tree, ["Generators"])
         for gen in network.generators:
-            QTreeWidgetItem(gens, [f"{gen.id} @ {gen.bus}"])
+            _add_equipment(gens, f"{gen.id} @ {gen.bus}", "gen", gen.id)
 
         caps = QTreeWidgetItem(self._tree, ["Capacitors"])
         for cap in network.capacitors:
             state = "on" if cap.in_service else "off"
-            QTreeWidgetItem(caps, [f"{cap.id} @ {cap.bus} ({state})"])
+            _add_equipment(caps, f"{cap.id} @ {cap.bus} ({state})", "cap", cap.id)
 
         self._tree.expandAll()
 
@@ -215,6 +255,10 @@ class NetworkView(PageView):
         if bus_id:
             self._sld.select_bus(bus_id)
             self.busPicked.emit(bus_id)
+
+    def _on_details_clicked(self, kind: str, obj_id: str) -> None:
+        """Navigate to the Equipment page for the given item."""
+        self.itemPicked.emit(kind, obj_id)
 
     def _on_bus_picked(self, bus_id: str) -> None:
         self.busPicked.emit(bus_id)

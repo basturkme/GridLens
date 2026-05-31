@@ -178,11 +178,26 @@ class TransformerItem(QGraphicsItem):
         painter.drawEllipse(QPointF(7.0, 0.0), 10.0, 10.0)
 
 
-class LoadItem(QGraphicsItem):
-    def __init__(self, center: QPointF, load: Load) -> None:
+class _EquipmentItem(QGraphicsItem):
+    """Base for clickable equipment symbols: carries its (kind, id) and is
+    selectable so the canvas can route a click to the matching editor."""
+
+    kind = ""
+
+    def __init__(self, center: QPointF, obj_id: str) -> None:
         super().__init__()
+        self.obj_id = obj_id
         self.setPos(center)
         self.setZValue(8)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+
+class LoadItem(_EquipmentItem):
+    kind = "load"
+
+    def __init__(self, center: QPointF, load: Load) -> None:
+        super().__init__(center, load.id)
         self.setToolTip(f"Load {load.id}\n{load.p_kw:g} kW, {load.q_kvar:g} kvar")
 
     def boundingRect(self) -> QRectF:
@@ -200,11 +215,11 @@ class LoadItem(QGraphicsItem):
         painter.drawPath(arrow)
 
 
-class GeneratorItem(QGraphicsItem):
+class GeneratorItem(_EquipmentItem):
+    kind = "gen"
+
     def __init__(self, center: QPointF, gen: Generator) -> None:
-        super().__init__()
-        self.setPos(center)
-        self.setZValue(8)
+        super().__init__(center, gen.id)
         self.setToolTip(f"Generator {gen.id}\n{gen.p_kw:g} kW, {gen.q_kvar:g} kvar")
 
     def boundingRect(self) -> QRectF:
@@ -223,11 +238,11 @@ class GeneratorItem(QGraphicsItem):
         painter.drawPath(wave)
 
 
-class CapacitorItem(QGraphicsItem):
+class CapacitorItem(_EquipmentItem):
+    kind = "cap"
+
     def __init__(self, center: QPointF, cap: Capacitor) -> None:
-        super().__init__()
-        self.setPos(center)
-        self.setZValue(8)
+        super().__init__(center, cap.id)
         self._in_service = cap.in_service
         state = "in service" if cap.in_service else "out of service"
         self.setToolTip(f"Capacitor {cap.id}\n{cap.q_kvar:g} kvar ({state})")

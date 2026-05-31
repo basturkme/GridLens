@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         network_view = self._pages["network"]
         if hasattr(network_view, "busPicked"):
             network_view.busPicked.connect(self._on_bus_picked)
+        if hasattr(network_view, "itemPicked"):
+            network_view.itemPicked.connect(self._on_item_picked)
         equipment_view = self._pages["equipment"]
         if hasattr(equipment_view, "networkEdited"):
             equipment_view.networkEdited.connect(self._on_network_edited)
@@ -141,15 +143,17 @@ class MainWindow(QMainWindow):
     # ----------------------------------------------------------------- #
     # Core file operations (dialog-free — directly unit-testable)
     # ----------------------------------------------------------------- #
-    def open_path(self, path: str | Path) -> None:
+    def open_path(self, path: str | Path, *, set_current: bool = True) -> None:
         """Load + validate + solve a network from disk and display it.
 
         Raises ParserError if the file is malformed; the current network is left
-        untouched in that case.
+        untouched in that case. With ``set_current=False`` the file does not
+        become the save target — used for the bundled example so a stray Ctrl+S
+        cannot overwrite the shipped reference; the user must Save As instead.
         """
         network = load_network(path)  # raises ParserError before any UI change
         self.set_network(network, solve(network))
-        self._current_path = Path(path)
+        self._current_path = Path(path) if set_current else None
         self._set_dirty(False)
 
     def save_to(self, path: str | Path) -> None:
@@ -173,7 +177,7 @@ class MainWindow(QMainWindow):
         if path is None:
             return False
         try:
-            self.open_path(path)
+            self.open_path(path, set_current=False)
             return True
         except (ParserError, OSError):
             return False
@@ -236,7 +240,7 @@ class MainWindow(QMainWindow):
             )
             return
         try:
-            self.open_path(path)
+            self.open_path(path, set_current=False)
         except (ParserError, OSError) as exc:
             QMessageBox.critical(self, "Could not open example", str(exc))
 
@@ -304,7 +308,22 @@ class MainWindow(QMainWindow):
         return msg
 
     def _on_bus_picked(self, bus_id: str) -> None:
-        self.statusBar().showMessage(f"Selected bus: {bus_id}")
+        """Clicking a bus on the diagram jumps to its editor on the Equipment page."""
+        equipment = self._pages["equipment"]
+        if self._network is not None and hasattr(equipment, "edit_bus"):
+            self._switch_page("equipment")
+            equipment.edit_bus(bus_id)
+            self.statusBar().showMessage(f"Editing bus: {bus_id}")
+        else:
+            self.statusBar().showMessage(f"Selected bus: {bus_id}")
+
+    def _on_item_picked(self, kind: str, obj_id: str) -> None:
+        """Clicking a load / generator / capacitor symbol jumps to its editor."""
+        equipment = self._pages["equipment"]
+        if self._network is not None and hasattr(equipment, "edit_item"):
+            self._switch_page("equipment")
+            equipment.edit_item(kind, obj_id)
+            self.statusBar().showMessage(f"Editing {kind}: {obj_id}")
 
     def _switch_page(self, key: str) -> None:
         page = self._pages.get(key)

@@ -38,8 +38,30 @@ def test_startup_example_loads(win) -> None:
     assert win.load_startup_example() is True
     assert win._network is not None
     assert len(win._network.buses) == 4
-    assert win._current_path == EXAMPLE
+    # The bundled example must NOT become the save target, so a stray Ctrl+S
+    # cannot overwrite the shipped reference; the user must Save As.
+    assert win._current_path is None
     assert win._dirty is False
+
+
+def test_bundled_example_is_not_overwritten_by_save(win, monkeypatch) -> None:
+    # Load the example the way startup does, edit it, then trigger Save.
+    win.load_startup_example()
+    assert win._current_path is None
+    win._network.loads[0].p_kw = 600.0
+    win._on_network_edited()
+
+    # With no current path, Save must fall back to Save As (a dialog), never
+    # silently writing over the shipped example file.
+    called = {}
+
+    def fake_save_as():
+        called["save_as"] = True
+        return False
+
+    monkeypatch.setattr(win, "_action_save_as", fake_save_as)
+    win._action_save()
+    assert called.get("save_as") is True
 
 
 def test_open_path_sets_state_and_solves(win) -> None:

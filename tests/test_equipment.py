@@ -180,3 +180,55 @@ def test_heavier_load_through_shell_lowers_voltage(qapp) -> None:
 
     v_after = next(b for b in win._solution.bus_results if b.bus_id == "B4").v_pu
     assert v_after < v_before
+
+
+def test_clicking_bus_on_diagram_opens_equipment_editor(qapp) -> None:
+    from gridlens.ui.main_window import MainWindow
+
+    net = _demo()
+    win = MainWindow()
+    win.set_network(net, solve(net))
+
+    # Simulate selecting a bus on the Network diagram.
+    win._pages["network"]._sld._bus_items["B4"].setSelected(True)
+
+    # The shell should now be on the Equipment page with B4's editor open.
+    assert win._stack.currentWidget() is win._pages["equipment"]
+    eq = win._pages["equipment"]
+    current = eq._tree.currentItem()
+    assert current is not None
+    from gridlens.ui.views.equipment_view import _ID_ROLE, _KIND_ROLE
+
+    assert current.data(0, _KIND_ROLE) == "bus"
+    assert current.data(0, _ID_ROLE) == "B4"
+    # A bus editor exposes the live "Solved |V|" readout for that bus.
+    assert eq._voltage_bus_id == "B4"
+
+
+def test_clicking_equipment_symbol_opens_its_editor(qapp) -> None:
+    from gridlens.ui.main_window import MainWindow
+    from gridlens.ui.sld.items import CapacitorItem, LoadItem
+
+    net = _demo()
+    win = MainWindow()
+    win.set_network(net, solve(net))
+
+    scene = win._pages["network"]._sld._scene
+    load_item = next(i for i in scene.items() if isinstance(i, LoadItem))
+    load_item.setSelected(True)
+
+    assert win._stack.currentWidget() is win._pages["equipment"]
+    eq = win._pages["equipment"]
+    from gridlens.ui.views.equipment_view import _ID_ROLE, _KIND_ROLE
+
+    current = eq._tree.currentItem()
+    assert current.data(0, _KIND_ROLE) == "load"
+    assert current.data(0, _ID_ROLE) == "Ld4"
+
+    # And a capacitor symbol routes to the capacitor editor.
+    scene.clearSelection()
+    cap_item = next(i for i in scene.items() if isinstance(i, CapacitorItem))
+    cap_item.setSelected(True)
+    current = eq._tree.currentItem()
+    assert current.data(0, _KIND_ROLE) == "cap"
+    assert current.data(0, _ID_ROLE) == "C3"

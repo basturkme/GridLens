@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 from gridlens.core.models import Network, SolutionResult
 from gridlens.ui.sld import build_scene
-from gridlens.ui.sld.items import BusItem
+from gridlens.ui.sld.items import BusItem, _EquipmentItem
 from gridlens.ui.views._base import PageView
 
 _BUS_ROLE = Qt.ItemDataRole.UserRole
@@ -32,6 +32,7 @@ class SLDView(QGraphicsView):
     """
 
     busPicked = pyqtSignal(str)
+    itemPicked = pyqtSignal(str, str)  # (kind, id) for load / gen / cap symbols
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -72,6 +73,9 @@ class SLDView(QGraphicsView):
             if isinstance(item, BusItem):
                 self.busPicked.emit(item.bus_id)
                 return
+            if isinstance(item, _EquipmentItem):
+                self.itemPicked.emit(item.kind, item.obj_id)
+                return
 
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
@@ -86,6 +90,7 @@ class NetworkView(PageView):
     breadcrumbs = ["Projects", "Network View"]
 
     busPicked = pyqtSignal(str)
+    itemPicked = pyqtSignal(str, str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -118,6 +123,7 @@ class NetworkView(PageView):
 
         self._sld = SLDView()
         self._sld.busPicked.connect(self._on_bus_picked)
+        self._sld.itemPicked.connect(self.itemPicked)
         splitter.addWidget(self._sld)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
@@ -160,7 +166,8 @@ class NetworkView(PageView):
             else {}
         )
 
-        buses = QTreeWidgetItem(self._tree, ["Buses & Equipment"])
+        # Category names mirror the Equipment page for consistency.
+        buses = QTreeWidgetItem(self._tree, ["Buses"])
         for bus in network.buses:
             label = bus.name or bus.id
             sol = sol_by_bus.get(bus.id)
@@ -169,18 +176,22 @@ class NetworkView(PageView):
             node = QTreeWidgetItem(buses, [label])
             node.setData(0, _BUS_ROLE, bus.id)
 
-        branches = QTreeWidgetItem(self._tree, ["Branches"])
+        lines = QTreeWidgetItem(self._tree, ["Lines"])
         for ln in network.lines:
-            QTreeWidgetItem(branches, [f"{ln.id}: {ln.from_bus} → {ln.to_bus}"])
+            QTreeWidgetItem(lines, [f"{ln.id}: {ln.from_bus} → {ln.to_bus}"])
 
-        equipment = QTreeWidgetItem(self._tree, ["Loads / Generators / Capacitors"])
+        loads = QTreeWidgetItem(self._tree, ["Loads"])
         for load in network.loads:
-            QTreeWidgetItem(equipment, [f"Load {load.id} @ {load.bus}"])
+            QTreeWidgetItem(loads, [f"{load.id} @ {load.bus}"])
+
+        gens = QTreeWidgetItem(self._tree, ["Generators"])
         for gen in network.generators:
-            QTreeWidgetItem(equipment, [f"Gen {gen.id} @ {gen.bus}"])
+            QTreeWidgetItem(gens, [f"{gen.id} @ {gen.bus}"])
+
+        caps = QTreeWidgetItem(self._tree, ["Capacitors"])
         for cap in network.capacitors:
             state = "on" if cap.in_service else "off"
-            QTreeWidgetItem(equipment, [f"Cap {cap.id} @ {cap.bus} ({state})"])
+            QTreeWidgetItem(caps, [f"{cap.id} @ {cap.bus} ({state})"])
 
         self._tree.expandAll()
 

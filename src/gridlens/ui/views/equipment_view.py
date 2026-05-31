@@ -128,15 +128,38 @@ class EquipmentView(PageView):
 
     # -- selection --------------------------------------------------------- #
     def _on_item_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
-        kind = item.data(0, _KIND_ROLE)
-        obj_id = item.data(0, _ID_ROLE)
+        self._open(item.data(0, _KIND_ROLE), item.data(0, _ID_ROLE))
+
+    def edit_bus(self, bus_id: str) -> None:
+        """Open the editor for a bus by id and select it in the list. Used when
+        the user clicks a bus on the Network diagram."""
+        self._open("bus", bus_id)
+
+    def edit_item(self, kind: str, obj_id: str) -> None:
+        """Open the editor for any equipment item (load / gen / cap / bus / line)
+        by kind and id. Used when the user clicks a symbol on the diagram."""
+        self._open(kind, obj_id)
+
+    def _open(self, kind, obj_id) -> None:
         if not kind or self._network is None:
             return
+        tree_item = self._find_tree_item(kind, obj_id)
+        if tree_item is not None:
+            self._tree.setCurrentItem(tree_item)
         self._voltage_label = None
         self._voltage_bus_id = None
         editor = self._editor_for(kind, obj_id)
         if editor is not None:
             self._set_editor(editor)
+
+    def _find_tree_item(self, kind: str, obj_id: str) -> QTreeWidgetItem | None:
+        for i in range(self._tree.topLevelItemCount()):
+            top = self._tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                child = top.child(j)
+                if child.data(0, _KIND_ROLE) == kind and child.data(0, _ID_ROLE) == obj_id:
+                    return child
+        return None
 
     def _editor_for(self, kind: str, obj_id: str) -> QWidget | None:
         net = self._network

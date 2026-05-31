@@ -9,6 +9,7 @@ env/
 .vscode/
 build/
 dist/
+export/
 *.spec.bak
 *.log
 .DS_Store

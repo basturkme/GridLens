@@ -160,7 +160,9 @@ def test_example_satisfies_kcl() -> None:
     # Drop the operator pin so the network is pure PQ for the KCL check.
     for b in net.buses:
         b.v_set_pu = None
-    res = solve(net)
+    # Solve to a tight tolerance so the KCL residual reflects solver accuracy
+    # rather than the (looser) default convergence threshold.
+    res = solve(net, tol=1e-10)
     assert res.converged
     assert _kcl_residual(net, res) < 1e-7
 

@@ -1,17 +1,28 @@
-"""VA (Backward-Forward Sweep) power-flow solver for radial distribution networks.
+"""VA (power-summation backward-forward sweep) power-flow solver for radial
+distribution networks.
 
-The radial topology lets us avoid building/inverting a Y-bus: we order buses by
-depth from the slack root, then alternate two sweeps until the bus voltages stop
-moving.
+The "VA approach" is the volt-ampere (power) summation variant of the
+backward-forward sweep: the backward pass accumulates the complex *power* flowing
+in each branch rather than the current. The radial topology lets us avoid
+building/inverting a Y-bus — we order buses by depth from the slack root, then
+alternate two sweeps until the bus voltages stop moving.
 
   1. Order buses by depth from the slack root (BFS traversal of the radial tree).
-  2. **Backward sweep** — from leaves toward root, accumulate branch currents
-     I_branch = Σ_downstream [conj((P_load - P_gen + j(Q_load - Q_gen)) / V_to)]
-              + jB_shunt · V_to    (capacitors / line charging as shunt susceptance,
-                                    B>0 capacitive → supplies reactive power)
-  3. **Forward sweep** — from root toward leaves, update voltages
-     V_to = V_from − Z_branch · I_branch
+  2. **Backward sweep (VA / power summation)** — from leaves toward root,
+     accumulate the complex power (volt-amperes) flowing into each branch:
+       S_branch = S_drawn + Σ_children (S_child + Z·|S_child|²/|V_child|²)
+     where S_drawn = (P_load − P_gen) + j(Q_load − Q_gen) − jB_shunt·|V|²
+     (capacitors / line charging enter as shunt susceptance, B>0 capacitive →
+     supplies reactive power) and the Z·|S|²/|V|² term is the branch series loss
+     (power, unlike current, is not conserved across a branch impedance).
+  3. **Forward sweep** — from root toward leaves, recover the branch current from
+     its VA flow and update voltages:
+       I_branch = conj(S_branch / V_to);  V_to = V_from − Z_branch · I_branch
   4. Repeat until max|V_k − V_{k-1}| < tol or iter > max_iter.
+
+  Current and power summation are algebraically equivalent for a radial feeder
+  (I = (S/V)*), so this converges to the same bus voltages and angles; the VA
+  form is used to match the project's required solver approach.
 
 Operator-pinned leaf voltage (Bus.v_set_pu):
   Plain BFS converges with PQ buses + a single slack. A bus whose |V| is fixed
@@ -276,27 +287,32 @@ def _inner_sweep(
             if not cmath.isfinite(voltages[bus]) or mag < _MIN_VOLTAGE or mag > _MAX_VOLTAGE:
                 return voltages, iterations, float("inf"), False, "diverged", mismatch_history
 
-        # Backward sweep: node current then accumulate up the tree.
-        i_branch: dict[str, complex] = {}
-        node_current: dict[str, complex] = {}
-        for bus in order:
-            v = voltages[bus]
-            s = complex(p_net[bus], q_net[bus])
-            # Shunt current drawn from the node is Y·V = jB·V (B>0 capacitive),
-            # so it supplies reactive power and lifts the downstream voltage.
-            node_current[bus] = (s / v).conjugate() + 1j * b_shunt[bus] * v
-
+        # Backward sweep (VA / power summation): from leaves to root, accumulate
+        # the complex power (volt-amperes) flowing into each branch — the local
+        # drawn power plus every downstream branch power *and its series loss*.
+        # Losses are explicit here because, unlike current, power is not conserved
+        # across a branch impedance.
+        s_branch: dict[str, complex] = {}
         for bus in reversed(order):
-            total = node_current[bus]
+            v = voltages[bus]
+            # Local power drawn from upstream: load − generation, minus the
+            # reactive power a shunt (capacitor B>0 / line charging) supplies,
+            # S_shunt = −jB|V|² (B>0 capacitive → injects Q, lifts the voltage).
+            s_drawn = complex(p_net[bus], q_net[bus]) - 1j * b_shunt[bus] * (abs(v) ** 2)
+            total = s_drawn
             for ch in children[bus]:
-                total += i_branch[ch]
-            i_branch[bus] = total
+                s_ch = s_branch[ch]
+                loss = branch_z[ch] * (abs(s_ch) ** 2) / (abs(voltages[ch]) ** 2)
+                total += s_ch + loss
+            s_branch[bus] = total
 
-        # Forward sweep: propagate voltages from root outward.
+        # Forward sweep: propagate voltages from root outward, recovering each
+        # branch current from its VA flow, I_branch = conj(S_branch / V_to).
         for bus in order:
             if bus == slack:
                 continue
-            voltages[bus] = voltages[parent[bus]] - branch_z[bus] * i_branch[bus]
+            i_branch = (s_branch[bus] / voltages[bus]).conjugate()
+            voltages[bus] = voltages[parent[bus]] - branch_z[bus] * i_branch
 
         max_dv = max(abs(voltages[b] - prev[b]) for b in order)
         mismatch_history.append(max_dv)

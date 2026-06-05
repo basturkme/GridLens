@@ -194,15 +194,26 @@ class EquipmentView(PageView):
     def _power_editor(self, obj, title: str) -> QWidget:
         w, form = _form(f"{title} {obj.id}", f"Connected at bus {obj.bus}")
 
+        # Read-only power factor, derived live from P and Q — makes clear that pf
+        # is taken from the entered operating point, never assumed to be unity.
+        pf_label = QLabel(_power_factor_text(obj.p_kw, obj.q_kvar))
+
+        def refresh_pf() -> None:
+            pf_label.setText(_power_factor_text(obj.p_kw, obj.q_kvar))
+
         p_field = NumericField()
         p_field.setText(f"{obj.p_kw:g}")
         p_field.valueChanged.connect(lambda v: self._set_attr(obj, "p_kw", v))
+        p_field.valueChanged.connect(lambda _v: refresh_pf())
         form.addRow("Active power P (kW)", p_field)
 
         q_field = NumericField()
         q_field.setText(f"{obj.q_kvar:g}")
         q_field.valueChanged.connect(lambda v: self._set_attr(obj, "q_kvar", v))
+        q_field.valueChanged.connect(lambda _v: refresh_pf())
         form.addRow("Reactive power Q (kvar)", q_field)
+
+        form.addRow("Power factor", pf_label)
         return w
 
     def _capacitor_editor(self, cap) -> QWidget:
@@ -327,6 +338,23 @@ def _form(title: str, subtitle: str = "") -> tuple[QWidget, QFormLayout]:
     outer.addWidget(form_host)
     outer.addStretch(1)
     return w, form
+
+
+def _power_factor_text(p_kw: float, q_kvar: float) -> str:
+    """Power factor derived from the operating point P, Q.
+
+    ``cos φ = |P| / √(P² + Q²)``. Q > 0 (inductive) is reported as *lagging*,
+    Q < 0 (capacitive) as *leading*. Returns ``—`` when the apparent power is
+    zero, where pf is undefined.
+    """
+    from math import hypot
+
+    s = hypot(p_kw, q_kvar)
+    if s == 0.0:
+        return "—"
+    pf = abs(p_kw) / s
+    sense = "" if q_kvar == 0.0 else (" lagging" if q_kvar > 0 else " leading")
+    return f"{pf:.3f}{sense}"
 
 
 def _find(items, obj_id):

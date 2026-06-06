@@ -174,11 +174,19 @@ class ReportsView(PageView):
         self._canvas.draw_idle()
 
     # -- export handler ----------------------------------------------------- #
+    def _default_export_name(self) -> str:
+        """Default CSV name: the network name (filesystem-safe) + '_voltages.csv',
+        falling back to plain 'voltages.csv' when the network is unnamed."""
+        name = self._network.name.strip() if self._network is not None else ""
+        safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in name).strip()
+        safe = "_".join(safe.split())  # collapse whitespace to single underscores
+        return f"{safe}_voltages.csv" if safe else "voltages.csv"
+
     def _on_export(self) -> None:
         if self._solution is None:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export results as CSV", "voltages.csv", "CSV files (*.csv)"
+            self, "Export results as CSV", self._default_export_name(), "CSV files (*.csv)"
         )
         if path:
             self.export_csv(path)

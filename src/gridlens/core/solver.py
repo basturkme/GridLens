@@ -123,7 +123,7 @@ def solve(
         for bus, q in q_inject.items():
             q_net[bus] = q_load_net[bus] - q  # injected reactive lowers drawn Q
 
-        voltages, inner_iters, inner_mismatch, inner_ok, inner_reason, mismatch_hist = _inner_sweep(
+        voltages, inner_iters, inner_mismatch, inner_ok, inner_reason, mismatch_hist = _converge_inner(
             order, parent, children, branch_z,
             p_net, q_net, b_shunt, v_slack, tol, max_iter,
         )
@@ -266,9 +266,37 @@ def _node_injections(network: Network, s_base_kw: float):
 # --------------------------------------------------------------------------- #
 # Inner backward-forward sweep
 # --------------------------------------------------------------------------- #
-def _inner_sweep(
+# Under-relaxation schedule. A plain sweep (damping 1.0) converges fast for
+# well-conditioned feeders, but stiff cases — a shunt behind a large series
+# impedance, as in low-voltage feeders with ohmic data — can make the fixed-point
+# iteration overshoot and diverge. When that happens we retry with progressively
+# heavier damping, which shrinks the iteration gain below 1 without moving the
+# fixed point (the converged voltages are identical).
+_DAMPING_SCHEDULE = (1.0, 0.5, 0.25, 0.1, 0.05)
+
+
+def _converge_inner(
     order, parent, children, branch_z,
     p_net, q_net, b_shunt, v_slack, tol, max_iter,
+):
+    """Run the inner sweep, falling back to heavier under-relaxation if it does
+    not converge. Returns the first converged result, or the last attempt."""
+    result = None
+    for damping in _DAMPING_SCHEDULE:
+        # Heavier damping needs more iterations to cover the same distance.
+        budget = max_iter if damping >= 1.0 else int(math.ceil(max_iter / damping))
+        result = _inner_sweep(
+            order, parent, children, branch_z,
+            p_net, q_net, b_shunt, v_slack, tol, budget, damping,
+        )
+        if result[3]:  # converged
+            return result
+    return result
+
+
+def _inner_sweep(
+    order, parent, children, branch_z,
+    p_net, q_net, b_shunt, v_slack, tol, max_iter, damping=1.0,
 ):
     slack = order[0]
     voltages: dict[str, complex] = {bus: complex(abs(v_slack), 0.0) for bus in order}
@@ -308,11 +336,14 @@ def _inner_sweep(
 
         # Forward sweep: propagate voltages from root outward, recovering each
         # branch current from its VA flow, I_branch = conj(S_branch / V_to).
+        # Under-relaxation (damping < 1) blends the new estimate with the old to
+        # keep stiff cases stable; it does not change the converged fixed point.
         for bus in order:
             if bus == slack:
                 continue
             i_branch = (s_branch[bus] / voltages[bus]).conjugate()
-            voltages[bus] = voltages[parent[bus]] - branch_z[bus] * i_branch
+            target = voltages[parent[bus]] - branch_z[bus] * i_branch
+            voltages[bus] = voltages[bus] + damping * (target - voltages[bus])
 
         max_dv = max(abs(voltages[b] - prev[b]) for b in order)
         mismatch_history.append(max_dv)

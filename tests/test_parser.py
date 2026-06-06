@@ -14,7 +14,58 @@ from gridlens.core.parser import (
     validate_network,
 )
 
-EXAMPLE = Path(__file__).resolve().parents[1] / "data" / "examples" / "4bus_radial.json"
+EXAMPLES = Path(__file__).resolve().parents[1] / "data" / "examples"
+EXAMPLE = EXAMPLES / "4bus_radial.json"
+INSTRUCTOR_EXAMPLE = EXAMPLES / "example_network.json"
+
+
+# --------------------------------------------------------------------------- #
+# Course (instructor) file format
+# --------------------------------------------------------------------------- #
+def test_load_instructor_example() -> None:
+    """The course-provided example file parses into the model end to end."""
+    net = load_network(INSTRUCTOR_EXAMPLE)
+    assert net.name == "Example Network"
+    assert net.base_mva == 1.0
+    assert [b.id for b in net.buses] == ["1", "2", "3", "4"]
+
+    slack = next(b for b in net.buses if b.is_slack)
+    assert slack.id == "1"
+    # Bus 4 is the only single-branch non-slack bus -> the leaf.
+    assert next(b for b in net.buses if b.is_leaf).id == "4"
+
+    # The transformer is folded into the branch list and referred to system base
+    # (x_pu 0.05 on a 2 MVA base, 1 MVA system base -> 0.025).
+    xfmr = next(ln for ln in net.lines if ln.is_transformer)
+    assert xfmr.from_bus == "1" and xfmr.to_bus == "2"
+    assert abs(xfmr.x_pu - 0.025) < 1e-9
+
+    # Line impedance converted from ohms: bus 2-3 at 0.4 kV, Z_base = 0.16 ohm.
+    line23 = next(ln for ln in net.lines if not ln.is_transformer and ln.from_bus == "2")
+    assert abs(line23.r_pu - 1.0 / 0.16) < 1e-6
+    assert abs(line23.x_pu - 2.5 / 0.16) < 1e-6
+
+    # Shunt sign convention: q_mvar > 0 absorbs (reactor) -> negative internal Q.
+    by_bus = {(c.bus, c.q_kvar) for c in net.capacitors}
+    assert ("3", -200.0) in by_bus  # 0.2 MVAr reactor
+    assert ("3", 100.0) in by_bus   # -0.1 MVAr capacitor
+
+    # Loads carry a nameplate; operating point defaults to zero (entered by hand).
+    load = net.loads[0]
+    assert load.s_rated_mva == 1.0
+    assert load.p_kw == 0.0 and load.q_kvar == 0.0
+
+
+def test_instructor_example_roundtrips(tmp_path: Path) -> None:
+    net = load_network(INSTRUCTOR_EXAMPLE)
+    out = tmp_path / "rt.json"
+    save_network(net, out)
+    again = load_network(out)
+    assert [b.id for b in again.buses] == [b.id for b in net.buses]
+    assert [ln.id for ln in again.lines] == [ln.id for ln in net.lines]
+    assert {(c.bus, c.q_kvar) for c in again.capacitors} == {
+        (c.bus, c.q_kvar) for c in net.capacitors
+    }
 
 
 def _valid_network() -> Network:
@@ -43,12 +94,14 @@ def test_load_example_file() -> None:
     net = load_network(EXAMPLE)
     assert net.name.startswith("4-bus")
     assert net.base_mva == 10.0
-    assert [b.id for b in net.buses] == ["B1", "B2", "B3", "B4"]
+    assert [b.id for b in net.buses] == ["1", "2", "3", "4"]
+    # Three branches: two lines + one transformer (folded into network.lines).
     assert len(net.lines) == 3
+    assert sum(1 for ln in net.lines if ln.is_transformer) == 1
     slack = [b for b in net.buses if b.is_slack]
-    assert len(slack) == 1 and slack[0].id == "B1"
+    assert len(slack) == 1 and slack[0].id == "1"
     leaf = next(b for b in net.buses if b.is_leaf)
-    assert leaf.id == "B4" and leaf.v_set_pu == 1.0
+    assert leaf.id == "4" and leaf.v_set_pu == 1.0
 
 
 # --------------------------------------------------------------------------- #

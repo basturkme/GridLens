@@ -1,0 +1,84 @@
+{
+  "system_data": [
+    {
+      "network_name": "Example Network",
+      "s_base_mva": 1,
+      "slack_bus": 1
+    }
+  ],
+  "bus_data": [
+    {
+      "bus_id": 1,
+      "bus_name": "Bus 1",
+      "voltage_level_kv": 35
+    },
+    {
+      "bus_id": 2,
+      "bus_name": "Bus 2",
+      "voltage_level_kv": 0.4
+    },
+    {
+      "bus_id": 3,
+      "bus_name": "Bus 3",
+      "voltage_level_kv": 0.4
+    },
+    {
+      "bus_id": 4,
+      "bus_name": "Bus 4",
+      "voltage_level_kv": 0.4
+    }
+  ],
+  "load_data": [
+    {
+      "load_id": 1,
+      "bus_id": 4,
+      "s_rated_mva": 1
+    }
+  ],
+  "gen_data": [
+    {
+      "generator_id": 1,
+      "bus_id": 2,
+      "s_rated_mva": 1
+    }
+  ],
+  "shunt_data": [
+    {
+      "shunt_id": 1,
+      "bus_id": 3,
+      "q_mvar": 0.2
+    },
+    {
+      "shunt_id": 2,
+      "bus_id": 3,
+      "q_mvar": -0.1
+    }
+  ],
+  "line_data": [
+    {
+      "line_id": 1,
+      "from_bus_id": 2,
+      "to_bus_id": 3,
+      "r_ohm": 1,
+      "x_ohm": 2.5
+    },
+    {
+      "line_id": 2,
+      "from_bus_id": 3,
+      "to_bus_id": 4,
+      "r_ohm": 1.5,
+      "x_ohm": 4
+    }
+  ],
+  "transformer_data": [
+    {
+      "transformer_id": 1,
+      "hv_bus_id": 1,
+      "lv_bus_id": 2,
+      "v_rated_high_kv": 35,
+      "v_rated_low_kv": 0.4,
+      "rated_s_mva": 2,
+      "x_pu": 0.05
+    }
+  ]
+}

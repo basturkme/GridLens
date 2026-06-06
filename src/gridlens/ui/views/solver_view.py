@@ -151,7 +151,7 @@ class SolverView(PageView):
         flow_layout.setSpacing(6)
         flow_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        flow_title = QLabel("Backward-Forward Sweep Flow")
+        flow_title = QLabel("VA Approach — Power-Summation Sweep")
         flow_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; margin-bottom: 6px;")
         flow_layout.addWidget(flow_title)
 
@@ -185,9 +185,9 @@ class SolverView(PageView):
 
         flow_layout.addWidget(make_step("1", "Initialize Voltages", "Set initial bus voltages V_i = 1.0 pu"))
         flow_layout.addWidget(make_arrow())
-        flow_layout.addWidget(make_step("2", "Backward Sweep", "Calculate branch currents from leaves to root"))
+        flow_layout.addWidget(make_step("2", "Backward Sweep (VA)", "Accumulate branch power S = P + jQ from leaves to root (incl. losses)"))
         flow_layout.addWidget(make_arrow())
-        flow_layout.addWidget(make_step("3", "Forward Sweep", "Update bus voltage values from root to leaves"))
+        flow_layout.addWidget(make_step("3", "Forward Sweep", "Recover I = (S / V)* and update voltages from root to leaves"))
         flow_layout.addWidget(make_arrow())
         
         check_step = QFrame()
@@ -246,8 +246,16 @@ class SolverView(PageView):
         self._log.setMaximumHeight(160)
         right_layout.addWidget(self._log)
 
-        right_layout.addWidget(QLabel("Iteration steps & mismatch history"))
-        
+        history_header = QHBoxLayout()
+        history_header.addWidget(QLabel("Iteration steps & mismatch history"))
+        history_header.addStretch(1)
+        self._clear_btn = QPushButton("Clear history")
+        self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clear_btn.setToolTip("Clear the convergence log and iteration table")
+        self._clear_btn.clicked.connect(self._clear_history)
+        history_header.addWidget(self._clear_btn)
+        right_layout.addLayout(history_header)
+
         # Columns: Outer pass | inner iteration | max |ΔV| | pinned |V| error |
         # tolerance | status. The Outer / Pinned columns only matter when the
         # network has a voltage-controlled (pinned) bus, so they start hidden and
@@ -301,6 +309,15 @@ class SolverView(PageView):
         else:
             self._log.append("\n" + "—" * 45 + "\n\n" + formatted)
         self._populate_table(result)
+
+    def _clear_history(self) -> None:
+        """Wipe the convergence log and iteration table, resetting the run count
+        so the next solve starts a fresh history."""
+        self._log.clear()
+        self._table.setRowCount(0)
+        self._table.setColumnHidden(self._COL_OUTER, True)
+        self._table.setColumnHidden(self._COL_PINNED, True)
+        self._run_counter = 0
 
     # -- internals ---------------------------------------------------------- #
     def _on_tol_changed(self, value: float) -> None:

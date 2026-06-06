@@ -172,9 +172,9 @@ def test_example_converges_and_orders() -> None:
     res = solve(net)
     assert res.converged
     by = _result_by_bus(res)
-    assert abs(by["B1"].v_pu - 1.0) < 1e-9  # slack
+    assert abs(by["1"].v_pu - 1.0) < 1e-9  # slack
     # All four buses solved.
-    assert set(by) == {"B1", "B2", "B3", "B4"}
+    assert set(by) == {"1", "2", "3", "4"}
 
 
 # --------------------------------------------------------------------------- #
@@ -196,10 +196,10 @@ def test_pinned_leaf_holds_setpoint() -> None:
 
 
 def test_pinned_leaf_on_example() -> None:
-    net = load_network(EXAMPLE)  # B4 pinned to 1.00
+    net = load_network(EXAMPLE)  # bus 4 pinned to 1.00
     res = solve(net)
     assert res.converged
-    assert abs(_result_by_bus(res)["B4"].v_pu - 1.00) < 1e-5
+    assert abs(_result_by_bus(res)["4"].v_pu - 1.00) < 1e-5
 
 
 # --------------------------------------------------------------------------- #

@@ -110,7 +110,15 @@ class EquipmentView(PageView):
 
         lines = QTreeWidgetItem(self._tree, ["Lines"])
         for ln in net.lines:
+            if ln.is_transformer:
+                continue
             add(lines, f"{ln.id}: {ln.from_bus} → {ln.to_bus}", "line", ln.id)
+
+        transformers = [ln for ln in net.lines if ln.is_transformer]
+        if transformers:
+            xfmr_node = QTreeWidgetItem(self._tree, ["Transformers"])
+            for ln in transformers:
+                add(xfmr_node, f"{ln.id}: {ln.from_bus} → {ln.to_bus}", "line", ln.id)
 
         loads = QTreeWidgetItem(self._tree, ["Loads"])
         for x in net.loads:
@@ -194,6 +202,11 @@ class EquipmentView(PageView):
     def _power_editor(self, obj, title: str) -> QWidget:
         w, form = _form(f"{title} {obj.id}", f"Connected at bus {obj.bus}")
 
+        # Nameplate rating from the network file; the operating P/Q below are the
+        # hand-entered conditions that the solver actually uses.
+        if obj.s_rated_mva:
+            form.addRow("Rated S (MVA)", QLabel(f"{obj.s_rated_mva:g}"))
+
         # Read-only power factor, derived live from P and Q — makes clear that pf
         # is taken from the entered operating point, never assumed to be unity.
         pf_label = QLabel(_power_factor_text(obj.p_kw, obj.q_kvar))
@@ -274,6 +287,22 @@ class EquipmentView(PageView):
         return w
 
     def _line_editor(self, line) -> QWidget:
+        if line.is_transformer:
+            w, form = _form(
+                f"Transformer {line.id}", f"{line.from_bus} (HV) → {line.to_bus} (LV)"
+            )
+            if line.xfmr_hv_kv is not None and line.xfmr_lv_kv is not None:
+                form.addRow(
+                    "Ratio", QLabel(f"{line.xfmr_hv_kv:g} / {line.xfmr_lv_kv:g} kV")
+                )
+            if line.xfmr_rated_mva is not None:
+                form.addRow("Rated S (MVA)", QLabel(f"{line.xfmr_rated_mva:g}"))
+            if line.xfmr_x_pu is not None:
+                form.addRow("X (pu, own base)", QLabel(f"{line.xfmr_x_pu:g}"))
+            form.addRow("X (pu, system base)", QLabel(f"{line.x_pu:g}"))
+            form.addRow(QLabel("Transformer parameters are fixed network data."))
+            return w
+
         w, form = _form(f"Line {line.id}", f"{line.from_bus} → {line.to_bus}")
         form.addRow("R (pu)", QLabel(f"{line.r_pu:g}"))
         form.addRow("X (pu)", QLabel(f"{line.x_pu:g}"))

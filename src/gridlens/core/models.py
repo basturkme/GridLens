@@ -26,6 +26,16 @@ class Line:
     x_pu: float = 0.0
     b_pu: float = 0.0
     rating_a: float | None = None
+    # A transformer is modelled as a branch too (it joins two buses and carries a
+    # series reactance). When ``is_transformer`` is set, ``r_pu``/``x_pu`` already
+    # hold the impedance on the *system* base so the solver treats it like any
+    # other branch; the ``xfmr_*`` fields keep the nameplate data for round-trip
+    # save back to the course file format. ``from_bus`` is the HV side.
+    is_transformer: bool = False
+    xfmr_rated_mva: float | None = None
+    xfmr_hv_kv: float | None = None
+    xfmr_lv_kv: float | None = None
+    xfmr_x_pu: float | None = None  # reactance on the transformer's own MVA base
 
 
 @dataclass
@@ -34,6 +44,7 @@ class Load:
     bus: str
     p_kw: float = 0.0
     q_kvar: float = 0.0
+    s_rated_mva: float = 0.0  # nameplate apparent power (operating P/Q set by hand)
 
 
 @dataclass
@@ -42,6 +53,7 @@ class Generator:
     bus: str
     p_kw: float = 0.0
     q_kvar: float = 0.0
+    s_rated_mva: float = 0.0  # nameplate apparent power (operating P/Q set by hand)
 
 
 @dataclass

@@ -1,25 +1,40 @@
 {
-  "name": "4-bus radial example (PDF Figure 1)",
-  "base_mva": 10.0,
-  "buses": [
-    { "id": "B1", "name": "Bus 1 (Grid)", "base_kv": 33.0, "is_slack": true,  "is_leaf": false },
-    { "id": "B2", "name": "Bus 2",        "base_kv": 11.0, "is_slack": false, "is_leaf": false },
-    { "id": "B3", "name": "Bus 3",        "base_kv": 11.0, "is_slack": false, "is_leaf": false },
-    { "id": "B4", "name": "Bus 4",        "base_kv": 11.0, "is_slack": false, "is_leaf": true, "v_set_pu": 1.00 }
+  "system_data": [
+    {
+      "network_name": "4-bus radial example (PDF Figure 1)",
+      "s_base_mva": 10.0,
+      "slack_bus": 1
+    }
   ],
-  "lines": [
-    { "id": "T1",  "from_bus": "B1", "to_bus": "B2", "r_pu": 0.005, "x_pu": 0.10, "b_pu": 0.0 },
-    { "id": "L23", "from_bus": "B2", "to_bus": "B3", "r_pu": 0.020, "x_pu": 0.06, "b_pu": 0.0 },
-    { "id": "L34", "from_bus": "B3", "to_bus": "B4", "r_pu": 0.025, "x_pu": 0.07, "b_pu": 0.0 }
+  "bus_data": [
+    { "bus_id": 1, "bus_name": "Bus 1 (Grid)", "voltage_level_kv": 33.0 },
+    { "bus_id": 2, "bus_name": "Bus 2", "voltage_level_kv": 11.0 },
+    { "bus_id": 3, "bus_name": "Bus 3", "voltage_level_kv": 11.0 },
+    { "bus_id": 4, "bus_name": "Bus 4", "voltage_level_kv": 11.0, "v_set_pu": 1.0 }
   ],
-  "loads": [
-    { "id": "Ld4", "bus": "B4", "p_kw": 150.0, "q_kvar": 50.0 }
+  "line_data": [
+    { "line_id": 1, "from_bus_id": 2, "to_bus_id": 3, "r_ohm": 0.242, "x_ohm": 0.726 },
+    { "line_id": 2, "from_bus_id": 3, "to_bus_id": 4, "r_ohm": 0.3025, "x_ohm": 0.847 }
   ],
-  "generators": [
-    { "id": "G2",  "bus": "B2", "p_kw": 100.0, "q_kvar": 0.0 }
+  "transformer_data": [
+    {
+      "transformer_id": 1,
+      "hv_bus_id": 1,
+      "lv_bus_id": 2,
+      "v_rated_high_kv": 33.0,
+      "v_rated_low_kv": 11.0,
+      "rated_s_mva": 10.0,
+      "x_pu": 0.10
+    }
   ],
-  "capacitors": [
-    { "id": "R3",  "bus": "B3", "q_kvar": -50.0, "in_service": true },
-    { "id": "C4",  "bus": "B4", "q_kvar": 50.0, "in_service": true }
+  "load_data": [
+    { "load_id": 1, "bus_id": 4, "s_rated_mva": 0.158, "p_mw": 0.15, "q_mvar": 0.05 }
+  ],
+  "gen_data": [
+    { "generator_id": 1, "bus_id": 2, "s_rated_mva": 0.1, "p_mw": 0.1, "q_mvar": 0.0 }
+  ],
+  "shunt_data": [
+    { "shunt_id": 1, "bus_id": 3, "q_mvar": 0.05, "in_service": true },
+    { "shunt_id": 2, "bus_id": 4, "q_mvar": -0.05, "in_service": true }
   ]
 }

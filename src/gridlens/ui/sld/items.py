@@ -138,10 +138,16 @@ class BranchItem(QGraphicsItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setAcceptHoverEvents(True)
         self._hover = False
-        self.setToolTip(
-            f"Line {line.id}\n{line.from_bus} → {line.to_bus}\n"
-            f"Z = {line.r_pu:g} + j{line.x_pu:g} pu"
-        )
+        if getattr(line, "is_transformer", False):
+            self.setToolTip(
+                f"Transformer {line.id}\n{line.from_bus} → {line.to_bus}\n"
+                f"X = {line.x_pu:g} pu (system base)"
+            )
+        else:
+            self.setToolTip(
+                f"Line {line.id}\n{line.from_bus} → {line.to_bus}\n"
+                f"Z = {line.r_pu:g} + j{line.x_pu:g} pu"
+            )
 
     def _path(self) -> QPainterPath:
         mid_x = (self._p1.x() + self._p2.x()) / 2.0

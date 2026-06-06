@@ -251,7 +251,17 @@ class NetworkView(PageView):
 
         lines = QTreeWidgetItem(self._tree, ["Lines"])
         for ln in network.lines:
+            if ln.is_transformer:
+                continue
             _add_equipment(lines, f"{ln.id}: {ln.from_bus} → {ln.to_bus}", "line", ln.id)
+
+        transformers = [ln for ln in network.lines if ln.is_transformer]
+        if transformers:
+            xfmr_node = QTreeWidgetItem(self._tree, ["Transformers"])
+            for ln in transformers:
+                _add_equipment(
+                    xfmr_node, f"{ln.id}: {ln.from_bus} → {ln.to_bus}", "line", ln.id
+                )
 
         loads = QTreeWidgetItem(self._tree, ["Loads"])
         for load in network.loads:

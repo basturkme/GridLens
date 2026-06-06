@@ -1,21 +1,42 @@
 """Network file parser.
 
-Reads and writes the JSON intermediate format documented in data/FORMAT.md
-and converts it to/from the :class:`~gridlens.core.models.Network` model. When
-the course-provided file format spec arrives, add an adapter here that converts
-it into the same model — the solver and UI are unaffected.
+The on-disk format is the course-provided JSON schema (see ``data/FORMAT.md``):
+``system_data`` / ``bus_data`` / ``load_data`` / ``gen_data`` / ``shunt_data`` /
+``line_data`` / ``transformer_data``. :func:`load_network` reads it into the
+internal :class:`~gridlens.core.models.Network` model (the solver and UI operate
+on that model, unaffected by the file shape) and :func:`save_network` writes it
+back out in the same schema.
+
+Key conversions the adapter performs:
+
+* line impedances given in **ohms** → per-unit on the system base
+  (``Z_base = kV² / S_base``, using the line's voltage level);
+* a **transformer** becomes a branch too — its ``x_pu`` (on the transformer's own
+  MVA base) is referred to the system base and the transformer is stored as a
+  :class:`Line` flagged ``is_transformer`` (HV side = ``from_bus``);
+* loads / generators carry only an ``s_rated_mva`` nameplate in the course files;
+  the **operating point** (P, Q — and hence power factor) is entered by hand, so
+  it defaults to zero on load unless the file also carries ``p_mw`` / ``q_mvar``
+  (which our own saved files do, so edits round-trip). Power factor is never
+  assumed.
+* leaf buses (where the operator may pin a voltage) are derived from the
+  topology: a non-slack bus with a single branch.
+
+A legacy intermediate format (top-level ``buses`` / ``lines`` arrays) is still
+accepted on read for backwards compatibility.
 
 Validation is split in two:
 
-* structural shape / types  -> raised eagerly while parsing (``_from_dict``)
+* structural shape / types  -> raised eagerly while parsing
 * network-level invariants  -> :func:`validate_network` (radial tree, single
-  slack, ≤10 buses, unique ids, dangling references)
+  slack, ≤ MAX_BUSES buses, unique ids, dangling references)
 
 Both surface as :class:`ParserError` so callers have a single thing to catch.
 """
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from pathlib import Path
 
 from gridlens.core.models import (
@@ -45,16 +66,21 @@ def load_network(path: str | Path) -> Network:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise ParserError(f"Invalid JSON in {path.name}: {e}") from e
-    network = _from_dict(data)
+    if not isinstance(data, dict):
+        raise ParserError("Top-level network data must be a JSON object.")
+    if _is_instructor_format(data):
+        network = _from_instructor_dict(data)
+    else:
+        network = _from_dict(data)
     validate_network(network)
     return network
 
 
 def save_network(network: Network, path: str | Path) -> None:
-    """Serialize a network to JSON. The output round-trips through
-    :func:`load_network` without loss."""
+    """Serialize a network to JSON in the course file format. The output
+    round-trips through :func:`load_network` without loss."""
     path = Path(path)
-    text = json.dumps(_to_dict(network), indent=2, ensure_ascii=False)
+    text = json.dumps(_to_instructor_dict(network), indent=2, ensure_ascii=False)
     path.write_text(text + "\n", encoding="utf-8")
 
 
@@ -75,7 +101,9 @@ def validate_network(network: Network) -> None:
     _ensure_unique(bus_ids, "bus")
     bus_id_set = set(bus_ids)
 
-    _ensure_unique([ln.id for ln in network.lines], "line")
+    # Lines and transformers share the branch namespace (both live in
+    # ``network.lines``); their ids must be unique together.
+    _ensure_unique([ln.id for ln in network.lines], "branch")
     _ensure_unique([x.id for x in network.loads], "load")
     _ensure_unique([x.id for x in network.generators], "generator")
     _ensure_unique([x.id for x in network.capacitors], "capacitor")
@@ -98,11 +126,12 @@ def validate_network(network: Network) -> None:
     for ln in network.lines:
         for endpoint in (ln.from_bus, ln.to_bus):
             if endpoint not in bus_id_set:
+                kind = "Transformer" if ln.is_transformer else "Line"
                 raise ParserError(
-                    f"Line '{ln.id}' references unknown bus '{endpoint}'."
+                    f"{kind} '{ln.id}' references unknown bus '{endpoint}'."
                 )
         if ln.from_bus == ln.to_bus:
-            raise ParserError(f"Line '{ln.id}' connects bus '{ln.from_bus}' to itself.")
+            raise ParserError(f"Branch '{ln.id}' connects bus '{ln.from_bus}' to itself.")
 
     for kind, items in (
         ("load", network.loads),
@@ -119,12 +148,247 @@ def validate_network(network: Network) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Deserialization
+# Instructor (course) format
 # --------------------------------------------------------------------------- #
-def _from_dict(data: object) -> Network:
-    if not isinstance(data, dict):
-        raise ParserError("Top-level network data must be a JSON object.")
+def _is_instructor_format(data: dict) -> bool:
+    return any(
+        k in data
+        for k in ("system_data", "bus_data", "line_data", "transformer_data")
+    )
 
+
+def _from_instructor_dict(data: dict) -> Network:
+    system = _seq(data, "system_data")
+    sys0 = _as_obj(system[0], "system_data[0]") if system else {}
+    name = _opt_str(sys0, "network_name", "") or ""
+    base_mva = _opt_num(sys0, "s_base_mva", 1.0)
+    slack_id = _opt_id(sys0, "slack_bus")
+
+    network = Network(name=name, base_mva=base_mva)
+
+    bus_kv: dict[str, float] = {}
+    for i, d in enumerate(_seq(data, "bus_data")):
+        ctx = f"bus #{i + 1}"
+        obj = _as_obj(d, ctx)
+        bid = _req_id(obj, "bus_id", ctx)
+        kv = _opt_num(obj, "voltage_level_kv", 1.0)
+        bus_kv[bid] = kv
+        network.buses.append(
+            Bus(
+                id=bid,
+                name=_opt_str(obj, "bus_name", ""),
+                base_kv=kv,
+                is_slack=(slack_id is not None and bid == slack_id),
+                is_leaf=False,  # derived from topology below
+                v_set_pu=_opt_num_or_none(obj, "v_set_pu"),
+            )
+        )
+
+    # Lines: impedance given in ohms, referred to per-unit on the system base.
+    for i, d in enumerate(_seq(data, "line_data")):
+        ctx = f"line #{i + 1}"
+        obj = _as_obj(d, ctx)
+        fb = _req_id(obj, "from_bus_id", ctx)
+        tb = _req_id(obj, "to_bus_id", ctx)
+        z_base = _z_base(bus_kv.get(fb, 1.0), base_mva)
+        network.lines.append(
+            Line(
+                id=_req_id(obj, "line_id", ctx),
+                from_bus=fb,
+                to_bus=tb,
+                r_pu=_opt_num(obj, "r_ohm", 0.0) / z_base,
+                x_pu=_opt_num(obj, "x_ohm", 0.0) / z_base,
+                b_pu=0.0,
+            )
+        )
+
+    # Transformers: a branch with its reactance referred to the system base. The
+    # internal id is "T"-prefixed so it never collides with a line id.
+    for i, d in enumerate(_seq(data, "transformer_data")):
+        ctx = f"transformer #{i + 1}"
+        obj = _as_obj(d, ctx)
+        hv = _req_id(obj, "hv_bus_id", ctx)
+        lv = _req_id(obj, "lv_bus_id", ctx)
+        rated = _opt_num(obj, "rated_s_mva", base_mva)
+        x_own = _opt_num(obj, "x_pu", 0.0)
+        x_sys = x_own * (base_mva / rated) if rated else x_own
+        network.lines.append(
+            Line(
+                id="T" + _req_id(obj, "transformer_id", ctx),
+                from_bus=hv,
+                to_bus=lv,
+                r_pu=0.0,
+                x_pu=x_sys,
+                b_pu=0.0,
+                is_transformer=True,
+                xfmr_rated_mva=rated,
+                xfmr_hv_kv=_opt_num_or_none(obj, "v_rated_high_kv"),
+                xfmr_lv_kv=_opt_num_or_none(obj, "v_rated_low_kv"),
+                xfmr_x_pu=x_own,
+            )
+        )
+
+    for i, d in enumerate(_seq(data, "load_data")):
+        ctx = f"load #{i + 1}"
+        obj = _as_obj(d, ctx)
+        network.loads.append(
+            Load(
+                id=_req_id(obj, "load_id", ctx),
+                bus=_req_id(obj, "bus_id", ctx),
+                p_kw=_opt_num(obj, "p_mw", 0.0) * 1000.0,
+                q_kvar=_opt_num(obj, "q_mvar", 0.0) * 1000.0,
+                s_rated_mva=_opt_num(obj, "s_rated_mva", 0.0),
+            )
+        )
+
+    for i, d in enumerate(_seq(data, "gen_data")):
+        ctx = f"generator #{i + 1}"
+        obj = _as_obj(d, ctx)
+        network.generators.append(
+            Generator(
+                id=_req_id(obj, "generator_id", ctx),
+                bus=_req_id(obj, "bus_id", ctx),
+                p_kw=_opt_num(obj, "p_mw", 0.0) * 1000.0,
+                q_kvar=_opt_num(obj, "q_mvar", 0.0) * 1000.0,
+                s_rated_mva=_opt_num(obj, "s_rated_mva", 0.0),
+            )
+        )
+
+    for i, d in enumerate(_seq(data, "shunt_data")):
+        ctx = f"shunt #{i + 1}"
+        obj = _as_obj(d, ctx)
+        # Course sign convention: q_mvar > 0 absorbs reactive power (a reactor),
+        # q_mvar < 0 supplies it (a capacitor). Our internal Capacitor.q_kvar is
+        # the *supplied* reactive (B>0 capacitive), so flip the sign.
+        network.capacitors.append(
+            Capacitor(
+                id=_req_id(obj, "shunt_id", ctx),
+                bus=_req_id(obj, "bus_id", ctx),
+                q_kvar=-_opt_num(obj, "q_mvar", 0.0) * 1000.0,
+                in_service=_opt_bool(obj, "in_service", True),
+            )
+        )
+
+    _mark_leaves(network)
+    return network
+
+
+def _to_instructor_dict(network: Network) -> dict:
+    slack = next((b.id for b in network.buses if b.is_slack), None)
+    system: dict = {"network_name": network.name, "s_base_mva": network.base_mva}
+    if slack is not None:
+        system["slack_bus"] = _id_out(slack)
+
+    bus_kv = {b.id: b.base_kv for b in network.buses}
+    bus_data = []
+    for b in network.buses:
+        entry: dict = {
+            "bus_id": _id_out(b.id),
+            "bus_name": b.name,
+            "voltage_level_kv": b.base_kv,
+        }
+        if b.v_set_pu is not None:
+            entry["v_set_pu"] = b.v_set_pu
+        bus_data.append(entry)
+
+    line_data = []
+    transformer_data = []
+    for ln in network.lines:
+        if ln.is_transformer:
+            transformer_data.append(
+                {
+                    "transformer_id": _id_out(_strip_t(ln.id)),
+                    "hv_bus_id": _id_out(ln.from_bus),
+                    "lv_bus_id": _id_out(ln.to_bus),
+                    "v_rated_high_kv": ln.xfmr_hv_kv
+                    if ln.xfmr_hv_kv is not None
+                    else bus_kv.get(ln.from_bus),
+                    "v_rated_low_kv": ln.xfmr_lv_kv
+                    if ln.xfmr_lv_kv is not None
+                    else bus_kv.get(ln.to_bus),
+                    "rated_s_mva": ln.xfmr_rated_mva
+                    if ln.xfmr_rated_mva is not None
+                    else network.base_mva,
+                    "x_pu": ln.xfmr_x_pu if ln.xfmr_x_pu is not None else ln.x_pu,
+                }
+            )
+        else:
+            z_base = _z_base(bus_kv.get(ln.from_bus, 1.0), network.base_mva)
+            line_data.append(
+                {
+                    "line_id": _id_out(ln.id),
+                    "from_bus_id": _id_out(ln.from_bus),
+                    "to_bus_id": _id_out(ln.to_bus),
+                    "r_ohm": ln.r_pu * z_base,
+                    "x_ohm": ln.x_pu * z_base,
+                }
+            )
+
+    load_data = [
+        {
+            "load_id": _id_out(x.id),
+            "bus_id": _id_out(x.bus),
+            "s_rated_mva": x.s_rated_mva,
+            "p_mw": x.p_kw / 1000.0,
+            "q_mvar": x.q_kvar / 1000.0,
+        }
+        for x in network.loads
+    ]
+    gen_data = [
+        {
+            "generator_id": _id_out(x.id),
+            "bus_id": _id_out(x.bus),
+            "s_rated_mva": x.s_rated_mva,
+            "p_mw": x.p_kw / 1000.0,
+            "q_mvar": x.q_kvar / 1000.0,
+        }
+        for x in network.generators
+    ]
+    shunt_data = [
+        {
+            "shunt_id": _id_out(x.id),
+            "bus_id": _id_out(x.bus),
+            "q_mvar": -x.q_kvar / 1000.0,  # supplied (internal) → absorbed (course)
+            "in_service": x.in_service,
+        }
+        for x in network.capacitors
+    ]
+
+    return {
+        "system_data": [system],
+        "bus_data": bus_data,
+        "load_data": load_data,
+        "gen_data": gen_data,
+        "shunt_data": shunt_data,
+        "line_data": line_data,
+        "transformer_data": transformer_data,
+    }
+
+
+def _z_base(kv: float, base_mva: float) -> float:
+    z = (kv * kv) / base_mva if base_mva else 1.0
+    return z if z else 1.0
+
+
+def _mark_leaves(network: Network) -> None:
+    """A leaf is a non-slack bus with exactly one incident branch."""
+    degree: dict[str, int] = defaultdict(int)
+    for ln in network.lines:
+        degree[ln.from_bus] += 1
+        degree[ln.to_bus] += 1
+    for b in network.buses:
+        if not b.is_slack and degree[b.id] == 1:
+            b.is_leaf = True
+
+
+def _strip_t(branch_id: str) -> str:
+    return branch_id[1:] if branch_id.startswith("T") else branch_id
+
+
+# --------------------------------------------------------------------------- #
+# Legacy intermediate format (top-level buses / lines) — read only
+# --------------------------------------------------------------------------- #
+def _from_dict(data: dict) -> Network:
     network = Network(
         name=_opt_str(data, "name", "") or "",
         base_mva=_opt_num(data, "base_mva", 1.0),
@@ -195,56 +459,6 @@ def _capacitor_from_dict(d: object, index: int) -> Capacitor:
 
 
 # --------------------------------------------------------------------------- #
-# Serialization
-# --------------------------------------------------------------------------- #
-def _to_dict(network: Network) -> dict:
-    return {
-        "name": network.name,
-        "base_mva": network.base_mva,
-        "buses": [_bus_to_dict(b) for b in network.buses],
-        "lines": [_line_to_dict(ln) for ln in network.lines],
-        "loads": [_injection_to_dict(x) for x in network.loads],
-        "generators": [_injection_to_dict(x) for x in network.generators],
-        "capacitors": [_capacitor_to_dict(c) for c in network.capacitors],
-    }
-
-
-def _bus_to_dict(b: Bus) -> dict:
-    out: dict = {
-        "id": b.id,
-        "name": b.name,
-        "base_kv": b.base_kv,
-        "is_slack": b.is_slack,
-        "is_leaf": b.is_leaf,
-    }
-    if b.v_set_pu is not None:
-        out["v_set_pu"] = b.v_set_pu
-    return out
-
-
-def _line_to_dict(ln: Line) -> dict:
-    out: dict = {
-        "id": ln.id,
-        "from_bus": ln.from_bus,
-        "to_bus": ln.to_bus,
-        "r_pu": ln.r_pu,
-        "x_pu": ln.x_pu,
-        "b_pu": ln.b_pu,
-    }
-    if ln.rating_a is not None:
-        out["rating_a"] = ln.rating_a
-    return out
-
-
-def _injection_to_dict(x) -> dict:
-    return {"id": x.id, "bus": x.bus, "p_kw": x.p_kw, "q_kvar": x.q_kvar}
-
-
-def _capacitor_to_dict(c: Capacitor) -> dict:
-    return {"id": c.id, "bus": c.bus, "q_kvar": c.q_kvar, "in_service": c.in_service}
-
-
-# --------------------------------------------------------------------------- #
 # Field helpers
 # --------------------------------------------------------------------------- #
 def _seq(data: dict, key: str) -> list:
@@ -268,6 +482,36 @@ def _req_str(obj: dict, key: str, ctx: str) -> str:
     value = obj[key]
     if not isinstance(value, str) or not value:
         raise ParserError(f"{ctx} field '{key}' must be a non-empty string.")
+    return value
+
+
+def _req_id(obj: dict, key: str, ctx: str) -> str:
+    """An id field that may be given as an integer or a string; normalised to str."""
+    if key not in obj or obj[key] is None:
+        raise ParserError(f"{ctx} is missing required field '{key}'.")
+    return _id_str(obj[key], key, ctx)
+
+
+def _opt_id(obj: dict, key: str) -> str | None:
+    if key not in obj or obj[key] is None:
+        return None
+    return _id_str(obj[key], key, key)
+
+
+def _id_str(value: object, key: str, ctx: str) -> str:
+    if isinstance(value, bool):
+        raise ParserError(f"{ctx} field '{key}' must be an id, got {value!r}.")
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str) and value:
+        return value
+    raise ParserError(f"{ctx} field '{key}' must be a non-empty id (string or integer).")
+
+
+def _id_out(value: str):
+    """Emit numeric ids as integers (matching the course format), others as-is."""
+    if isinstance(value, str) and value.lstrip("-").isdigit():
+        return int(value)
     return value
 
 
@@ -318,13 +562,14 @@ def _ensure_unique(ids: list[str], kind: str) -> None:
 
 def _ensure_radial_tree(network: Network, bus_ids: set[str]) -> None:
     """A valid radial feeder is a connected, acyclic, undirected graph: it must
-    have exactly (buses - 1) lines and be fully connected from the slack bus."""
+    have exactly (buses - 1) branches (lines + transformers) and be fully
+    connected from the slack bus."""
     n_buses = len(bus_ids)
-    n_lines = len(network.lines)
-    if n_lines != n_buses - 1:
+    n_branches = len(network.lines)
+    if n_branches != n_buses - 1:
         raise ParserError(
             f"Network is not radial: {n_buses} buses need exactly "
-            f"{n_buses - 1} lines, but found {n_lines} "
+            f"{n_buses - 1} branches, but found {n_branches} "
             "(a radial feeder is a tree)."
         )
 

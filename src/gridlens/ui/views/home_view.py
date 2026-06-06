@@ -89,18 +89,18 @@ class HomeView(PageView):
 
         title = QLabel("GridLens")
         title.setFont(QFont("Segoe UI", 34, QFont.Weight.Bold))
-        title.setStyleSheet("color: white; background: transparent;")
+        title.setStyleSheet("color: #3B82F6; background: transparent;")
         hero_layout.addWidget(title)
 
         tagline = QLabel("Distribution Feeder Analyzer")
         tagline.setFont(QFont("Segoe UI", 15, QFont.Weight.DemiBold))
-        tagline.setStyleSheet("color: #7db4ff; background: transparent;")
+        tagline.setStyleSheet("color: #ffffff; background: transparent;")
         hero_layout.addWidget(tagline)
 
         intro = QLabel(
             "Turn a fixed feeder topology and its live operating conditions into "
             "instant visibility of every bus voltage, with violations flagged "
-            "automatically. Open a network file to begin, or load an example feeder."
+            "automatically."
         )
         intro.setWordWrap(True)
         intro.setMinimumWidth(560)
@@ -109,6 +109,17 @@ class HomeView(PageView):
             "color: #ffffff; background: transparent; font-size: 11.5pt;"
         )
         hero_layout.addWidget(intro)
+
+        intro2 = QLabel(
+            "Open a network file to begin, or load an example feeder from our database."
+        )
+        intro2.setWordWrap(True)
+        intro2.setMinimumWidth(560)
+        intro2.setMaximumWidth(640)
+        intro2.setStyleSheet(
+            "color: rgba(255, 255, 255, 0.9); background: transparent; font-size: 11.5pt;"
+        )
+        hero_layout.addWidget(intro2)
 
         hero_layout.addSpacing(8)
         actions = QHBoxLayout()
@@ -135,7 +146,7 @@ class HomeView(PageView):
         features.setSpacing(16)
         for icon, name, desc in (
             ("⚡", "VA Power-Flow Solver",
-             "Power-summation backward-forward sweep for radial feeders, up to 10 buses."),
+             "Power-summation backward-forward sweep for radial feeders."),
             ("◫", "Single-Line Diagram",
              "Distinct symbols per equipment type, with live voltage-violation tinting."),
             ("✎", "On-the-Fly Editing",

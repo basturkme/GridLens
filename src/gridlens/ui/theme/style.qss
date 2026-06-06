@@ -7,6 +7,14 @@ QWidget {
     font-size: 10pt;
 }
 
+/* Labels should not paint their own background box — they sit on panels and
+   cards of varying colour, so a fixed background looks like a stray rectangle
+   behind the text. Components that need a banner background (e.g. the warning
+   banner) set it explicitly via a more specific #id selector below. */
+QLabel {
+    background: transparent;
+}
+
 /* ----- Header bar ----- */
 QFrame#HeaderBar {
     background-color: #0F172A;

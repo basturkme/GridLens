@@ -1,6 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 import glob
+import os
 from PyInstaller.utils.hooks import collect_data_files
+
+# Windows .exe icon (shown in Explorer). Drop an icon at the path below — e.g.
+# generate it from a logo PNG with `python tools/make_icon.py logo.png`. If it is
+# absent the build still succeeds with the default icon.
+_ICON = os.path.join("src", "gridlens", "ui", "assets", "app.ico")
+icon = _ICON if os.path.exists(_ICON) else None
 
 datas = []
 datas += collect_data_files(
@@ -33,6 +40,7 @@ exe = EXE(
     a.datas,
     [],
     name="GridLens",
+    icon=icon,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

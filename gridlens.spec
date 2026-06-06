@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files(
-    "gridlens", includes=["**/*.qss", "**/*.png", "**/*.svg", "**/*.md"]
+    "gridlens", includes=["**/*.qss", "**/*.png", "**/*.svg", "**/*.jpg", "**/*.md"]
 )
 # Ship the example feeder + format spec so the app opens with a demo network.
 datas += [

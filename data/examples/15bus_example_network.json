@@ -1,0 +1,68 @@
+{
+  "system_data": [
+    {
+      "network_name": "15-bus radial test feeder",
+      "s_base_mva": 10.0,
+      "slack_bus": 1
+    }
+  ],
+  "bus_data": [
+    { "bus_id": 1,  "bus_name": "Bus 1 (Grid)", "voltage_level_kv": 33.0 },
+    { "bus_id": 2,  "bus_name": "Bus 2",  "voltage_level_kv": 11.0 },
+    { "bus_id": 3,  "bus_name": "Bus 3",  "voltage_level_kv": 11.0 },
+    { "bus_id": 4,  "bus_name": "Bus 4",  "voltage_level_kv": 11.0 },
+    { "bus_id": 5,  "bus_name": "Bus 5",  "voltage_level_kv": 11.0 },
+    { "bus_id": 6,  "bus_name": "Bus 6",  "voltage_level_kv": 11.0 },
+    { "bus_id": 7,  "bus_name": "Bus 7",  "voltage_level_kv": 11.0 },
+    { "bus_id": 8,  "bus_name": "Bus 8",  "voltage_level_kv": 11.0 },
+    { "bus_id": 9,  "bus_name": "Bus 9",  "voltage_level_kv": 11.0 },
+    { "bus_id": 10, "bus_name": "Bus 10", "voltage_level_kv": 11.0 },
+    { "bus_id": 11, "bus_name": "Bus 11", "voltage_level_kv": 11.0 },
+    { "bus_id": 12, "bus_name": "Bus 12", "voltage_level_kv": 11.0 },
+    { "bus_id": 13, "bus_name": "Bus 13", "voltage_level_kv": 11.0 },
+    { "bus_id": 14, "bus_name": "Bus 14", "voltage_level_kv": 11.0 },
+    { "bus_id": 15, "bus_name": "Bus 15", "voltage_level_kv": 11.0 }
+  ],
+  "line_data": [
+    { "line_id": 23,   "from_bus_id": 2,  "to_bus_id": 3,  "r_ohm": 0.30, "x_ohm": 0.45 },
+    { "line_id": 34,   "from_bus_id": 3,  "to_bus_id": 4,  "r_ohm": 0.35, "x_ohm": 0.50 },
+    { "line_id": 45,   "from_bus_id": 4,  "to_bus_id": 5,  "r_ohm": 0.40, "x_ohm": 0.55 },
+    { "line_id": 56,   "from_bus_id": 5,  "to_bus_id": 6,  "r_ohm": 0.30, "x_ohm": 0.40 },
+    { "line_id": 67,   "from_bus_id": 6,  "to_bus_id": 7,  "r_ohm": 0.45, "x_ohm": 0.60 },
+    { "line_id": 38,   "from_bus_id": 3,  "to_bus_id": 8,  "r_ohm": 0.50, "x_ohm": 0.55 },
+    { "line_id": 89,   "from_bus_id": 8,  "to_bus_id": 9,  "r_ohm": 0.40, "x_ohm": 0.45 },
+    { "line_id": 410,  "from_bus_id": 4,  "to_bus_id": 10, "r_ohm": 0.55, "x_ohm": 0.60 },
+    { "line_id": 1011, "from_bus_id": 10, "to_bus_id": 11, "r_ohm": 0.45, "x_ohm": 0.50 },
+    { "line_id": 512,  "from_bus_id": 5,  "to_bus_id": 12, "r_ohm": 0.60, "x_ohm": 0.65 },
+    { "line_id": 613,  "from_bus_id": 6,  "to_bus_id": 13, "r_ohm": 0.50, "x_ohm": 0.55 },
+    { "line_id": 1314, "from_bus_id": 13, "to_bus_id": 14, "r_ohm": 0.40, "x_ohm": 0.45 },
+    { "line_id": 715,  "from_bus_id": 7,  "to_bus_id": 15, "r_ohm": 0.55, "x_ohm": 0.60 }
+  ],
+  "transformer_data": [
+    {
+      "transformer_id": 1,
+      "hv_bus_id": 1,
+      "lv_bus_id": 2,
+      "v_rated_high_kv": 33.0,
+      "v_rated_low_kv": 11.0,
+      "rated_s_mva": 15.0,
+      "x_pu": 0.10
+    }
+  ],
+  "load_data": [
+    { "load_id": 5,  "bus_id": 5,  "s_rated_mva": 0.389, "p_mw": 0.35, "q_mvar": 0.17 },
+    { "load_id": 7,  "bus_id": 7,  "s_rated_mva": 0.439, "p_mw": 0.4,  "q_mvar": 0.18 },
+    { "load_id": 9,  "bus_id": 9,  "s_rated_mva": 0.762, "p_mw": 0.7,  "q_mvar": 0.3 },
+    { "load_id": 11, "bus_id": 11, "s_rated_mva": 0.501, "p_mw": 0.45, "q_mvar": 0.22 },
+    { "load_id": 12, "bus_id": 12, "s_rated_mva": 0.873, "p_mw": 0.8,  "q_mvar": 0.35 },
+    { "load_id": 14, "bus_id": 14, "s_rated_mva": 0.604, "p_mw": 0.55, "q_mvar": 0.25 },
+    { "load_id": 15, "bus_id": 15, "s_rated_mva": 0.546, "p_mw": 0.5,  "q_mvar": 0.22 }
+  ],
+  "gen_data": [
+    { "generator_id": 6, "bus_id": 6, "s_rated_mva": 1.02, "p_mw": 1.0, "q_mvar": 0.2 }
+  ],
+  "shunt_data": [
+    { "shunt_id": 8,  "bus_id": 8,  "q_mvar": -0.6, "in_service": true },
+    { "shunt_id": 13, "bus_id": 13, "q_mvar": -0.4, "in_service": true }
+  ]
+}

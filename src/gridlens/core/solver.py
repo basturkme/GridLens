@@ -280,14 +280,17 @@ def _converge_inner(
     p_net, q_net, b_shunt, v_slack, tol, max_iter,
 ):
     """Run the inner sweep, falling back to heavier under-relaxation if it does
-    not converge. Returns the first converged result, or the last attempt."""
+    not converge. Returns the first converged result, or the last attempt.
+
+    ``max_iter`` is honoured as a hard per-attempt cap: every damping level gets
+    the same iteration budget the user configured, so the reported iteration
+    count never exceeds it. If a genuinely stiff network needs more, the operator
+    raises Max iterations — the solver does not silently overrun the setting."""
     result = None
     for damping in _DAMPING_SCHEDULE:
-        # Heavier damping needs more iterations to cover the same distance.
-        budget = max_iter if damping >= 1.0 else int(math.ceil(max_iter / damping))
         result = _inner_sweep(
             order, parent, children, branch_z,
-            p_net, q_net, b_shunt, v_slack, tol, budget, damping,
+            p_net, q_net, b_shunt, v_slack, tol, max_iter, damping,
         )
         if result[3]:  # converged
             return result

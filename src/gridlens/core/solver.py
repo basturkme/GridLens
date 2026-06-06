@@ -25,15 +25,17 @@ alternate two sweeps until the bus voltages stop moving.
   form is used to match the project's required solver approach.
 
 Operator-pinned leaf voltage (Bus.v_set_pu):
-  Plain BFS converges with PQ buses + a single slack. A bus whose |V| is fixed
-  (the operator pins a leaf voltage) needs an outer Q-compensation loop:
-    a) Treat the pinned bus as PQ with an initial reactive injection guess.
-    b) After each inner BFS converges, read the resulting |V| and compute
-       ΔV = V_set − |V|.
-    c) Nudge the injected Q via the Thévenin-reactance sensitivity ΔQ ≈ ΔV / X_th.
+  Plain BFS converges with PQ buses + a single slack at a known voltage. When the
+  operator instead pins a *leaf* voltage, the boundary condition flips: the leaf
+  voltage is the known quantity and the slack/grid voltage becomes the unknown.
+  An outer loop solves for it:
+    a) Run the inner sweep with the current slack-voltage guess (all PQ).
+    b) Read the resulting pinned-leaf |V| and compute ΔV = V_set − |V|.
+    c) Scale the slack voltage toward the set-point: V_slack ·= V_set / |V_leaf|.
     d) Repeat until |ΔV| < tol.
-  Generators in this model are pure PQ injections (no regulated |V|), so the only
-  voltage-regulated element is the pinned leaf.
+  No reactive power is injected — holding the leaf simply determines what the
+  source voltage must be (the slack voltage changes; everything else follows).
+  Generators in this model are pure PQ injections (no regulated |V|).
 
 Capacitor banks are modeled as shunt susceptances toggled by `in_service`.
 """
@@ -98,10 +100,15 @@ def solve(
         for b in network.buses
         if b.v_set_pu is not None and not b.is_slack
     }
-    x_th = _thevenin_reactance(pinned, parent, branch_z)
 
-    # Outer Q-compensation loop. With no pinned buses this runs exactly once.
-    q_inject: dict[str, float] = {bus: 0.0 for bus in pinned}
+    # Outer loop. When a leaf voltage is pinned, the operator fixes that leaf and
+    # the slack/grid voltage becomes the unknown: we hold the pinned leaf at its
+    # set-point and let the slack voltage take whatever value the radial drop
+    # requires. (Per the course clarification — "fix the leaf, the source voltage
+    # changes" — no reactive power is injected to do this.) With no pinned leaf
+    # this runs exactly once with the slack fixed at its nominal voltage.
+    v_mag = abs(v_slack)                  # slack voltage magnitude (solved for if pinned)
+    ctrl_bus = next(iter(pinned), None)   # the leaf whose set-point drives the slack
     voltages: dict[str, complex] = {}
     inner_iters = 0
     inner_mismatch = 0.0
@@ -111,22 +118,21 @@ def solve(
     mismatch_hist = []
     steps: list[SweepStep] = []
     outer_idx = 0
-    q_used: dict[str, float] = dict(q_inject)
+    # ``max_iter`` is a *total* sweep budget shared across every outer pass, so the
+    # iteration count the user sees never exceeds the configured limit even when a
+    # pinned leaf needs several slack-voltage adjustment passes.
+    budget = max_iter
 
     for _ in range(_MAX_OUTER_ITER):
+        if budget <= 0:
+            outer_ok = False
+            break
         outer_idx += 1
-        # Snapshot the injection feeding *this* sweep; it is what produced the
-        # voltages we ultimately report (the post-sweep nudge below only matters
-        # if another pass runs).
-        q_used = dict(q_inject)
-        q_net = dict(q_load_net)
-        for bus, q in q_inject.items():
-            q_net[bus] = q_load_net[bus] - q  # injected reactive lowers drawn Q
-
         voltages, inner_iters, inner_mismatch, inner_ok, inner_reason, mismatch_hist = _converge_inner(
             order, parent, children, branch_z,
-            p_net, q_net, b_shunt, v_slack, tol, max_iter,
+            p_net, q_load_net, b_shunt, complex(v_mag, 0.0), tol, budget,
         )
+        budget -= inner_iters
         # Record this pass's inner sweep as part of the full trajectory.
         for j, dv_inner in enumerate(mismatch_hist, start=1):
             steps.append(SweepStep(outer=outer_idx, inner=j, max_dv=dv_inner))
@@ -136,21 +142,18 @@ def solve(
         if not pinned:
             break
 
-        # Tag the last inner step of this pass with the pinned-voltage error,
-        # then nudge the injected Q toward holding each pinned |V|.
+        # Hold the pinned leaf by scaling the slack voltage toward the set-point.
         pinned_err = max(abs(v_set - abs(voltages[bus])) for bus, v_set in pinned.items())
         if steps:
             steps[-1].pinned_err = pinned_err
-        outer_ok = True
-        for bus, v_set in pinned.items():
-            dv = v_set - abs(voltages[bus])
-            if abs(dv) > tol:
-                outer_ok = False
-            xth = x_th[bus]
-            if xth > 1e-12:
-                q_inject[bus] += _OUTER_DAMPING * dv / xth
-        if outer_ok:
+        if pinned_err < tol:
+            outer_ok = True
             break
+        outer_ok = False
+        v_leaf = abs(voltages[ctrl_bus])
+        if v_leaf > _MIN_VOLTAGE:
+            ratio = pinned[ctrl_bus] / v_leaf
+            v_mag *= 1.0 + _OUTER_DAMPING * (ratio - 1.0)
 
     bus_results = [
         _bus_solution(b.id, voltages.get(b.id, complex(float("nan"))))
@@ -159,6 +162,11 @@ def solve(
     converged = inner_ok and outer_ok
     if converged:
         message = "Converged."
+        if pinned:
+            message += (
+                f"  Grid (slack) voltage settled at {v_mag:.4f} pu to hold the "
+                "pinned leaf at its set-point."
+            )
     elif not inner_ok:
         if inner_reason == "diverged":
             message = (
@@ -182,7 +190,9 @@ def solve(
         mismatch_history=mismatch_hist,
         steps=steps,
         outer_iterations=outer_idx,
-        pinned_q_inject_kvar={bus: q_used.get(bus, 0.0) * s_base_kw for bus in pinned},
+        # No reactive power is injected to hold the leaf now (the slack voltage is
+        # adjusted instead), so there is no required-Q figure to report.
+        pinned_q_inject_kvar={},
     )
 
 
@@ -223,19 +233,6 @@ def _build_topology(network: Network, root: str):
     if len(visited) != len(network.buses):
         return None
     return order, parent, children, branch_z
-
-
-def _thevenin_reactance(pinned, parent, branch_z) -> dict[str, float]:
-    """Sum of series reactance along the path from slack root to each pinned bus."""
-    x_th: dict[str, float] = {}
-    for bus in pinned:
-        x = 0.0
-        node = bus
-        while node in parent:
-            x += branch_z[node].imag
-            node = parent[node]
-        x_th[bus] = x
-    return x_th
 
 
 # --------------------------------------------------------------------------- #

@@ -172,9 +172,31 @@ def test_example_converges_and_orders() -> None:
     res = solve(net)
     assert res.converged
     by = _result_by_bus(res)
-    assert abs(by["1"].v_pu - 1.0) < 1e-9  # slack
+    # Bus 4 is a pinned leaf: it is held at its set-point and the slack (Bus 1)
+    # voltage is whatever the radial drop requires (it is the unknown now).
+    assert abs(by["4"].v_pu - 1.0) < 1e-5  # pinned leaf held at set-point
     # All four buses solved.
     assert set(by) == {"1", "2", "3", "4"}
+
+
+def test_pinned_leaf_makes_slack_float() -> None:
+    """Per the course clarification: pinning a leaf fixes that leaf and lets the
+    slack/grid voltage change to whatever holds it (no reactive injection)."""
+    net = Network(
+        base_mva=10.0,
+        buses=[
+            Bus(id="A", is_slack=True),
+            Bus(id="B", is_leaf=True, v_set_pu=1.0),
+        ],
+        lines=[Line(id="1", from_bus="A", to_bus="B", r_pu=0.02, x_pu=0.1)],
+        loads=[Load(id="L", bus="B", p_kw=800.0, q_kvar=400.0)],
+    )
+    res = solve(net)
+    assert res.converged
+    by = _result_by_bus(res)
+    assert abs(by["B"].v_pu - 1.0) < 1e-5      # leaf held at set-point
+    assert by["A"].v_pu > 1.0 + 1e-4           # slack rose to feed the drop
+    assert res.pinned_q_inject_kvar == {}      # no reactive injected
 
 
 # --------------------------------------------------------------------------- #

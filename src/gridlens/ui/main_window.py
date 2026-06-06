@@ -258,7 +258,8 @@ class MainWindow(QMainWindow):
         self._solution = solution
         for key in ("network", "equipment", "solver", "reports"):
             self._pages[key].set_network(network, solution)
-            
+            self._pages[key].set_warning(solution)
+
         # Update footer totals!
         if network is not None:
             violations = 0
@@ -310,6 +311,9 @@ class MainWindow(QMainWindow):
             self._pages["equipment"].apply_solution(self._solution)
         else:
             self._pages["equipment"].set_network(self._network, self._solution)
+        # Keep the shared non-convergence banner in sync on every page.
+        for key in ("network", "equipment", "solver", "reports"):
+            self._pages[key].set_warning(self._solution)
 
     def _status_text(self) -> str:
         if self._network is None:

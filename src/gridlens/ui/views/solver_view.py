@@ -219,8 +219,8 @@ class SolverView(PageView):
         flow_layout.addWidget(make_arrow())
         flow_layout.addWidget(make_step(
             "5", "Pinned |V| Check (outer loop)",
-            "Only if a bus voltage is pinned: is |V_set − |V|| < tol?\n"
-            "If not, adjust injected Q (ΔQ ≈ ΔV / X_th) and re-sweep.",
+            "Only if a leaf voltage is pinned: is |V_set − |V|| < tol?\n"
+            "If not, adjust the slack/grid voltage (V_slack ·= V_set / |V|) and re-sweep.",
         ))
 
         outer_loop = QLabel("↺ Outer loop: back to Step 2 until pinned |V| is held")
@@ -413,7 +413,7 @@ class SolverView(PageView):
         outer = getattr(result, "outer_iterations", 1)
         if outer > 1:
             lines.append(
-                f"  Outer passes:  {outer} (Q-compensation to hold pinned |V|)"
+                f"  Outer passes:  {outer} (slack-voltage adjustment to hold pinned |V|)"
             )
         q_inj = getattr(result, "pinned_q_inject_kvar", {})
         for bus, kvar in q_inj.items():

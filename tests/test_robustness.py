@@ -89,13 +89,17 @@ def test_network_view_shows_banner_when_not_converged(qapp) -> None:
 
     net = _two_bus(150.0)
     view = NetworkView()
-    view.set_network(net, solve(net))
-    assert view._warning.isHidden()  # healthy solve -> no banner
+    good = solve(net)
+    view.set_network(net, good)
+    view.set_warning(good)
+    assert view._warning_wrap.isHidden()  # healthy solve -> no banner
 
     bad = _two_bus(1e9)
-    view.set_network(bad, solve(bad))
-    assert not view._warning.isHidden()
-    assert "did not converge" in view._warning.text().lower()
+    bad_sol = solve(bad)
+    view.set_network(bad, bad_sol)
+    view.set_warning(bad_sol)
+    assert not view._warning_wrap.isHidden()
+    assert "did not converge" in view._warning_banner.text().lower()
 
 
 def test_extreme_edit_through_shell_does_not_crash(qapp) -> None:
@@ -117,5 +121,7 @@ def test_extreme_edit_through_shell_does_not_crash(qapp) -> None:
     # No exception; shell reports non-convergence everywhere.
     assert win._solution is not None
     assert win._solution.converged is False
-    assert not win._pages["network"]._warning.isHidden()
+    # The shared non-convergence banner shows on every solution page.
+    for key in ("network", "equipment", "solver", "reports"):
+        assert not win._pages[key]._warning_wrap.isHidden()
     assert "not converge" in win.statusBar().currentMessage().lower()

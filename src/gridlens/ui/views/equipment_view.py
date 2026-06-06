@@ -264,6 +264,8 @@ class EquipmentView(PageView):
             v_field = NumericField(minimum=0.8, maximum=1.2)
             v_field.setText(f"{bus.v_set_pu:g}" if bus.v_set_pu is not None else "1.00")
             v_field.setEnabled(bus.v_set_pu is not None)
+            v_field.setMinimumWidth(110)
+            v_field.setToolTip("Target voltage magnitude in pu (0.80–1.20)")
 
             def on_toggle(_checked: bool) -> None:
                 on = hold.isChecked()

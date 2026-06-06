@@ -1,15 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+import glob
 from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files(
     "gridlens", includes=["**/*.qss", "**/*.png", "**/*.svg", "**/*.jpg", "**/*.md"]
 )
-# Ship the example feeder + format spec so the app opens with a demo network.
-datas += [
-    ("data/examples/4bus_radial.json", "data/examples"),
-    ("data/FORMAT.md", "data"),
-]
+# Ship every bundled example feeder + the format spec so the app opens with a demo
+# network and the user can open any of the provided examples from the frozen exe.
+datas += [(f, "data/examples") for f in glob.glob("data/examples/*.json")]
+datas += [("data/FORMAT.md", "data")]
 
 a = Analysis(
     ["src/gridlens/__main__.py"],

@@ -113,6 +113,27 @@ QFrame#ContentFrame {
     background-color: #0F172A;
 }
 
+/* ----- Text inputs (numeric fields, leaf-voltage field, etc.) -----
+   A visible border + panel background so every input box reads as an input,
+   including its disabled state (e.g. the leaf "Hold this voltage" field before
+   it is enabled). More specific rules (#FilterInput, [invalid="true"]) win. */
+QLineEdit {
+    background-color: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: #F8FAFC;
+    selection-background-color: #3B82F6;
+}
+QLineEdit:focus {
+    border: 1px solid #3B82F6;
+}
+QLineEdit:disabled {
+    background-color: #131B2B;
+    border: 1px solid #2A3950;
+    color: #7C8AA0;
+}
+
 /* ----- Filter bar ----- */
 QLineEdit#FilterInput {
     background-color: #1E293B;

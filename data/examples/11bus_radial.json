@@ -47,7 +47,7 @@
     { "load_id": 11, "bus_id": 11, "s_rated_mva": 0.0825, "p_mw": 0.08, "q_mvar": 0.02 }
   ],
   "gen_data": [
-    { "generator_id": 6, "bus_id": 6, "s_rated_mva": 0.051, "p_mw": 0.05, "q_mvar": 0.01 }
+    { "gen_id": 6, "bus_id": 6, "s_rated_mva": 0.051, "p_mw": 0.05, "q_mvar": 0.01 }
   ],
   "shunt_data": [
     { "shunt_id": 5, "bus_id": 5, "q_mvar": 0.03,  "in_service": true },

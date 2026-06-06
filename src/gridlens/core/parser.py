@@ -246,7 +246,9 @@ def _from_instructor_dict(data: dict) -> Network:
         obj = _as_obj(d, ctx)
         network.generators.append(
             Generator(
-                id=_req_id(obj, "generator_id", ctx),
+                # Spec uses `gen_id`; the course's own example file uses
+                # `generator_id` — accept either so both parse.
+                id=_req_id_any(obj, ("gen_id", "generator_id"), ctx),
                 bus=_req_id(obj, "bus_id", ctx),
                 p_kw=_opt_num(obj, "p_mw", 0.0) * 1000.0,
                 q_kvar=_opt_num(obj, "q_mvar", 0.0) * 1000.0,
@@ -336,7 +338,7 @@ def _to_instructor_dict(network: Network) -> dict:
     ]
     gen_data = [
         {
-            "generator_id": _id_out(x.id),
+            "gen_id": _id_out(x.id),
             "bus_id": _id_out(x.bus),
             "s_rated_mva": x.s_rated_mva,
             "p_mw": x.p_kw / 1000.0,
@@ -490,6 +492,14 @@ def _req_id(obj: dict, key: str, ctx: str) -> str:
     if key not in obj or obj[key] is None:
         raise ParserError(f"{ctx} is missing required field '{key}'.")
     return _id_str(obj[key], key, ctx)
+
+
+def _req_id_any(obj: dict, keys: tuple[str, ...], ctx: str) -> str:
+    """Like :func:`_req_id` but accepts the first of several alias field names."""
+    for key in keys:
+        if key in obj and obj[key] is not None:
+            return _id_str(obj[key], key, ctx)
+    raise ParserError(f"{ctx} is missing required field '{keys[0]}'.")
 
 
 def _opt_id(obj: dict, key: str) -> str | None:

@@ -56,6 +56,27 @@ def test_load_instructor_example() -> None:
     assert load.p_kw == 0.0 and load.q_kvar == 0.0
 
 
+def test_gen_id_alias_accepted(tmp_path: Path) -> None:
+    """The spec names the field `gen_id`; the course's own example uses
+    `generator_id`. Both must parse."""
+    base = {
+        "system_data": [{"network_name": "t", "s_base_mva": 1.0, "slack_bus": 1}],
+        "bus_data": [
+            {"bus_id": 1, "voltage_level_kv": 11.0},
+            {"bus_id": 2, "voltage_level_kv": 11.0},
+        ],
+        "line_data": [
+            {"line_id": 1, "from_bus_id": 1, "to_bus_id": 2, "r_ohm": 0.1, "x_ohm": 0.2}
+        ],
+    }
+    for key in ("gen_id", "generator_id"):
+        p = tmp_path / f"{key}.json"
+        data = dict(base, gen_data=[{key: 7, "bus_id": 2, "s_rated_mva": 0.5}])
+        p.write_text(json.dumps(data), encoding="utf-8")
+        net = load_network(p)
+        assert net.generators[0].id == "7"
+
+
 def test_instructor_example_roundtrips(tmp_path: Path) -> None:
     net = load_network(INSTRUCTOR_EXAMPLE)
     out = tmp_path / "rt.json"

@@ -68,7 +68,7 @@ A transformer is treated as a branch; its `x_pu` is referred to the system base
 
 | Field                  | Type | Notes                                       |
 |------------------------|------|---------------------------------------------|
-| load_id / generator_id | id   | Unique identifier                           |
+| load_id / gen_id       | id   | Unique identifier (`generator_id` also accepted) |
 | bus_id                 | id   | Bus the unit connects to                    |
 | s_rated_mva            | number | Nameplate apparent-power rating, MVA      |
 | p_mw                   | number | *Optional.* Operating active power, MW      |

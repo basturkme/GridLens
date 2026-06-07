@@ -14,3 +14,7 @@ export/
 *.log
 .DS_Store
 Thumbs.db
+
+# local-only helper scripts and submission staging (not part of the repo)
+tools/
+delivery/

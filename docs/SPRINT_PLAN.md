@@ -23,12 +23,13 @@ manual, and a one-page infographic.
 | 4 | On-the-fly equipment editor | ✅ Done | `4b37492` |
 | 5 | File management (Open / Save / New) | ✅ Done | `1f5adb7` |
 | 6 | Solver view + Reports view | ✅ Done | `f3d40ec` |
-| 7 | Robustness & UX hardening | ✅ Done | (pending commit) |
-| 8 | Portable `.exe` packaging | ⏳ Planned | — |
-| 9 | User manual + infographic | ⏳ Planned | — |
+| 7 | Robustness & UX hardening | ✅ Done | — |
+| 8 | Portable `.exe` packaging | ✅ Done | — |
+| 9 | User manual + infographic + source PDF | ✅ Done | — |
+| 10 | Course data format + solver corrections | ✅ Done | — |
 
-Test suite at end of Sprint 7: **69 passing** (parser, solver, SLD, equipment,
-file I/O, solver/reports views, robustness).
+Current test suite: **79 passing** (parser incl. course format, solver, SLD,
+equipment, file I/O, solver/reports views, robustness).
 
 ---
 
@@ -56,6 +57,10 @@ file I/O, solver/reports views, robustness).
 - Outer Q-compensation loop holds the operator-pinned leaf voltage via
   `ΔQ ≈ ΔV / X_th`. Per-bus under/over/ok violation flags.
 - Independent Kirchhoff-current residual test (<1e-7) validates accuracy.
+
+> **Revised in Sprint 10:** the solver now uses **power (VA) summation** with
+> adaptive under-relaxation, and holds a pinned leaf by **solving for the slack
+> voltage** (the grid voltage changes; no reactive power is injected).
 
 ### Sprint 3 — Single-line-diagram rendering ✅
 **Goal:** visualize the feeder so a field engineer can read it (Figure 1).
@@ -106,31 +111,37 @@ file I/O, solver/reports views, robustness).
 
 ---
 
-## Planned sprints
-
-### Sprint 8 — Portable `.exe` packaging
+### Sprint 8 — Portable `.exe` packaging ✅
 **Goal:** ship a single Windows-11 portable executable (requirement viii).
-**Scope:**
-- Build via `python build.py` / `gridlens.spec`; confirm bundled data
-  (`data/examples`, `FORMAT.md`, QSS) resolves through `_resources`.
-- Launch the frozen build, verify the demo network renders and edits re-solve.
-- Trim startup time / size; document the Defender-false-positive mitigations
-  already in the spec (no UPX, excluded toolkits).
-**Deliverables:** working `dist/GridLens.exe`, a build/run checklist, a frozen
-smoke test.
+- `python build.py` drives `gridlens.spec`; **all** example feeders, `FORMAT.md`,
+  QSS and image assets are bundled and resolved through `_resources`.
+- Windows `.exe` icon wired in the spec (`app.ico`); no UPX / excluded toolkits
+  to limit Defender false positives.
 
-### Sprint 9 — User manual + infographic
-**Goal:** the two written deliverables (Professionalism 30%).
-**Scope:**
-- **User manual** (≤7 pages) from `docs/user_manual/outline.md` in field-engineer
-  prose: install/run, input data format, editing operating conditions,
-  interpreting voltages/violations. Formatting: Times New Roman 11pt, 1.15
-  spacing, 2 cm margins, justified.
-- **Infographic** (one page) from `docs/infographic/outline.md`: use case,
-  performance, tech specs, sample SLD.
-- Export the source code to a single PDF for submission.
-**Deliverables:** `UserManual.pdf`, `Infographic.pdf`, source-code PDF, and the
-final submission `.zip`.
+### Sprint 9 — User manual + infographic + source PDF ✅
+**Goal:** the written deliverables (Professionalism 30%).
+- **User manual** built into the app (Help page), rewritten for the course data
+  format and current behaviour.
+- **Infographic** — a single-page, brand-styled document (hero + spec/feature
+  blocks) for the submission.
+- **Source-code PDF** of the core engine for the submission.
+
+### Sprint 10 — Course data format + solver corrections ✅
+**Goal:** match the instructor-provided file format and clarified solver semantics.
+- **Parser** now reads/writes the course JSON (`system_data`, `bus_data`,
+  `load_data`, `gen_data`, `shunt_data`, `line_data`, `transformer_data`):
+  ohms→pu conversion, transformers folded into the branch list, shunt sign per
+  spec (positive `q_mvar` = reactor), loads/gens carry a nameplate while the
+  operating P/Q (and power factor) are entered by hand — never assumed. Leaves
+  are auto-detected; `gen_id` and `generator_id` are both accepted.
+- **Solver** switched to **VA / power-summation** sweep with adaptive
+  under-relaxation; `max_iter` is a firm *total* budget; a pinned leaf is held by
+  **solving for the slack voltage** (no Q injection).
+- **UX:** non-convergence banner on every page; live power-factor readout and
+  rated-S display in the editor; transformer category; network-named CSV export;
+  redesigned Home (hero + feature cards); visible input fields; app icon.
+- New example feeders: `example_network` (course), `11bus_radial`,
+  `15bus_example_network`, `15bus_example_network_stressed`.
 
 ---
 

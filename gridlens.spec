@@ -3,9 +3,8 @@ import glob
 import os
 from PyInstaller.utils.hooks import collect_data_files
 
-# Windows .exe icon (shown in Explorer). Drop an icon at the path below — e.g.
-# generate it from a logo PNG with `python tools/make_icon.py logo.png`. If it is
-# absent the build still succeeds with the default icon.
+# Windows .exe icon (shown in Explorer). Uses the icon at the path below if it
+# exists; otherwise the build still succeeds with the default icon.
 _ICON = os.path.join("src", "gridlens", "ui", "assets", "app.ico")
 icon = _ICON if os.path.exists(_ICON) else None
 
